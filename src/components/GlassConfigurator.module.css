@@ -1,0 +1,296 @@
+.configSection {
+  height: 90dvh;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  background: radial-gradient(circle at 90% 10%, rgba(196, 36, 56, 0.03) 0%, transparent 60%);
+  padding: 0;
+}
+
+.headerContainer {
+  margin-bottom: 2.5rem;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.mainTitle {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 300;
+  color: var(--foreground);
+}
+
+.mainTitle strong {
+  font-weight: 800;
+  color: transparent;
+  background: linear-gradient(135deg, var(--foreground) 30%, var(--accent-cyan) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+/* Two column widget container layout */
+.widgetGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+.controlPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* Compressed spacing */
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.groupLabel {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.8);
+}
+
+.optionsRow {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.optionBtn {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--glass-border);
+  padding: 0.625rem 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+
+.optionBtn:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--foreground);
+}
+
+.optionActive {
+  background: rgba(196, 36, 56, 0.08);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(196, 36, 56, 0.05);
+}
+
+/* Results panel glass card layout */
+.resultCard {
+  border-radius: 6px;
+  padding: 2rem; /* Reduced from 3rem */
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem; /* Reduced from 2rem */
+  position: relative;
+  top: auto;
+}
+
+.resultHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.recLabel {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-cyan);
+}
+
+.recTitle {
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--foreground);
+}
+
+/* Visual Stack blueprint representation */
+.glassStackVisual {
+  height: 100px; /* Reduced from 160px */
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Glass pane diagram layers */
+.pane {
+  height: 100%;
+  border-radius: 2px;
+  position: relative;
+}
+
+.spacerBar {
+  height: 80%;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.02),
+    rgba(0, 0, 0, 0.02) 5px,
+    rgba(0, 0, 0, 0.05) 5px,
+    rgba(0, 0, 0, 0.05) 10px
+  );
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.4);
+  position: relative;
+}
+
+.argonLabel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 5px rgba(196, 36, 56, 0.25);
+  animation: breathe 3s infinite ease-in-out;
+}
+
+@keyframes breathe {
+  0% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.4; }
+}
+
+.paneLabel {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.5);
+  white-space: nowrap;
+}
+
+/* Performance metrics readout layout */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 1rem 0;
+}
+
+.metricItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  align-items: center;
+  text-align: center;
+}
+
+.metricVal {
+  font-family: var(--font-title);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.metricLabel {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.recDescription {
+  font-size: 0.8125rem;
+  color: rgba(15, 23, 42, 0.7);
+  line-height: 1.4;
+}
+
+.quoteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--accent-cyan);
+  color: #ffffff;
+  border: 1px solid var(--accent-cyan);
+  padding: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 0.75rem;
+}
+
+.quoteBtn:hover {
+  background: transparent;
+  color: var(--accent-cyan);
+  box-shadow: 0 0 20px rgba(196, 36, 56, 0.25);
+}
+
+@media (max-width: 991px) {
+  .configSection {
+    height: auto;
+    max-height: none;
+    padding: 4rem 0;
+  }
+  
+  .widgetGrid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .resultCard {
+    position: static;
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .optionsRow {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .metricsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+}

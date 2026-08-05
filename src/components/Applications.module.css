@@ -1,0 +1,241 @@
+.section {
+  min-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  padding: 6rem 0;
+}
+
+.gridBg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.redGlow1 {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(196, 36, 56, 0.09) 0%, transparent 70%);
+  top: -200px;
+  right: -100px;
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(40px);
+}
+
+.redGlow2 {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(196, 36, 56, 0.07) 0%, transparent 70%);
+  bottom: -300px;
+  left: -200px;
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(50px);
+}
+
+
+.headerContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 3rem;
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.mainTitle {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 300;
+  color: var(--foreground);
+}
+
+.mainTitle strong {
+  font-weight: 800;
+  color: transparent;
+  background: linear-gradient(135deg, var(--foreground) 30%, var(--accent-cyan) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.viewAllLink {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--foreground);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--accent-cyan);
+  transition: all 0.3s ease;
+}
+
+.viewAllLink:hover {
+  color: var(--accent-cyan);
+  gap: 0.75rem;
+}
+
+.portfolioGrid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  grid-template-rows: repeat(2, 1fr);
+  gap: 1.5rem;
+  height: 600px;
+}
+
+.card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+}
+
+.card0 {
+  grid-column: 1 / 2;
+  grid-row: 1 / 3;
+}
+
+.card1 {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+}
+
+.card2 {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+}
+
+.cardBg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-size: cover;
+  background-position: center;
+  filter: saturate(0.8) contrast(1.1);
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
+}
+
+.card:hover .cardBg {
+  transform: scale(1.05);
+  filter: saturate(1) contrast(1.15);
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(5, 8, 17, 0) 40%,
+    rgba(5, 8, 17, 0.85) 100%
+  );
+  z-index: 2;
+}
+
+.content {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  right: 1.5rem;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cardTitle {
+  font-family: var(--font-title);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.cardCategory {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+}
+
+.techDetail {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.25rem 0.5rem;
+  border-radius: 2px;
+  background: rgba(5, 8, 17, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 991px) {
+  .headerContainer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  
+  .portfolioGrid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    height: auto;
+  }
+  
+  .card0 {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    height: 400px;
+  }
+  
+  .card1 {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    height: 300px;
+  }
+  
+  .card2 {
+    grid-column: 1 / 2;
+    grid-row: 3 / 4;
+    height: 300px;
+  }
+}

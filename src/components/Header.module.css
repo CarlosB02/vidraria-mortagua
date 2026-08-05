@@ -1,0 +1,310 @@
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.scrolled {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  height: 70px;
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.navContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-title);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--foreground);
+  cursor: pointer;
+  z-index: 1001;
+}
+
+.logoIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 24px;
+  height: 24px;
+}
+
+.logoIcon::before,
+.logoIcon::after {
+  content: '';
+  position: absolute;
+  border: 1.5px solid var(--accent-cyan);
+  width: 14px;
+  height: 14px;
+  transform: rotate(45deg);
+}
+
+.logoIcon::before {
+  top: 2px;
+  left: 2px;
+  border-color: var(--accent-cyan);
+}
+
+.logoIcon::after {
+  bottom: 2px;
+  right: 2px;
+  border-color: var(--accent-teal);
+  opacity: 0.7;
+}
+
+.navMenu {
+  display: flex;
+  align-items: center;
+  gap: 2.25rem;
+}
+
+.navLink {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.7);
+  transition: all 0.3s ease;
+  position: relative;
+  padding: 0.25rem 0;
+}
+
+.navLink:hover {
+  color: var(--foreground);
+}
+
+.navLink::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--accent-cyan);
+  transition: width 0.3s ease;
+}
+
+.navLink:hover::after {
+  width: 100%;
+}
+
+.rightContainer {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.langDropdownContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  padding-right: 1rem;
+}
+
+/* Invisible block to bridge the gap between button and menu so hover doesn't break */
+.langDropdownContainer::after {
+  content: '';
+  position: absolute;
+  bottom: -1.5rem;
+  left: 0;
+  width: 100%;
+  height: 1.5rem;
+}
+
+.langDropdownBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.7);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.langDropdownBtn:hover {
+  color: var(--foreground);
+}
+
+.langDropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 1rem;
+  margin-top: 0.5rem;
+  background: white;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+/* Removed pseudo-element from menu because overflow: hidden clipped it */
+
+.langDropdownContainer:hover .langDropdownMenu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.langDropdownItem {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  color: rgba(15, 23, 42, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flagIcon {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.langDropdownItem:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--foreground);
+}
+
+.langActive {
+  color: var(--accent-cyan);
+}
+
+.langBtn {
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.langBtn:hover {
+  color: var(--foreground);
+}
+
+.portalBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  border: 1px solid var(--accent-cyan);
+  background: rgba(196, 36, 56, 0.05);
+  color: var(--foreground);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.portalBtn:hover {
+  background: var(--accent-cyan);
+  color: #ffffff;
+  box-shadow: 0 0 15px rgba(196, 36, 56, 0.3);
+}
+
+/* Mobile Menu controls */
+.mobileMenuBtn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--foreground);
+  cursor: pointer;
+  z-index: 1001;
+}
+
+@media (max-width: 991px) {
+  .navMenu {
+    display: none;
+  }
+
+  .rightContainer {
+    display: none;
+  }
+
+  .mobileMenuBtn {
+    display: block;
+  }
+}
+
+/* Sidebar for Mobile navigation */
+.mobileMenu {
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 300px;
+  height: 100dvh;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-left: 1px solid var(--glass-border);
+  padding: 100px 2rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+}
+
+.mobileMenuOpen {
+  right: 0;
+}
+
+.mobileMenuLink {
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  color: var(--foreground);
+}
+
+.mobilePortalBtn {
+  margin-top: auto;
+  text-align: center;
+  padding: 1rem;
+  border: 1px solid var(--accent-cyan);
+  background: rgba(196, 36, 56, 0.05);
+  color: var(--foreground);
+  border-radius: 4px;
+  font-weight: 600;
+}

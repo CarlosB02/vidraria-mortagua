@@ -1,0 +1,184 @@
+.section {
+  padding: 8rem 0;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 5rem;
+  align-items: start;
+}
+
+.formPane {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.titleArea {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+}
+
+.mainTitle {
+  font-size: 2.25rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.mainTitle strong {
+  font-weight: 850;
+  color: transparent;
+  background: linear-gradient(135deg, var(--foreground) 30%, var(--accent-cyan) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.input, .select, .textarea {
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--glass-border);
+  padding: 1rem 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--foreground);
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.input:focus, .select:focus, .textarea:focus {
+  border-color: var(--accent-cyan);
+  background: rgba(196, 36, 56, 0.02);
+  box-shadow: 0 0 10px rgba(196, 36, 56, 0.08);
+}
+
+.select option {
+  background: #ffffff;
+  color: var(--foreground);
+}
+
+.submitBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--accent-cyan);
+  color: #ffffff;
+  border: 1px solid var(--accent-cyan);
+  padding: 1.125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
+.submitBtn:hover {
+  background: transparent;
+  color: var(--accent-cyan);
+  box-shadow: 0 0 25px rgba(196, 36, 56, 0.25);
+}
+
+/* Info Column pane styling */
+.infoPane {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.infoBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.blockTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  border-left: 2px solid var(--accent-cyan);
+  padding-left: 0.75rem;
+}
+
+.addressText {
+  color: rgba(15, 23, 42, 0.75);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.workingHours {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+.hourRow {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding-bottom: 0.5rem;
+}
+
+.hourVal {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+@media (max-width: 991px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 4rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .formRow {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
