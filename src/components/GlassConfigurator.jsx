@@ -100,27 +100,27 @@ export default function GlassConfigurator() {
 
         {/* Dynamic Calculator Widget Grid */}
         <div className={styles.widgetGrid}>
-          
+
           {/* Left panel selectors */}
           <div className={styles.controlPanel}>
-            
+
             {/* Thermal Insulation Group */}
             <div className={styles.controlGroup}>
               <div className={styles.groupLabel}>Isolamento Térmico (Aquecimento)</div>
               <div className={styles.optionsRow}>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${thermal === "medium" ? styles.optionActive : ""}`}
                   onClick={() => setThermal("medium")}
                 >
                   Standard (Ug ~1.4)
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${thermal === "high" ? styles.optionActive : ""}`}
                   onClick={() => setThermal("high")}
                 >
                   Elevado (Ug ~1.1)
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${thermal === "max" ? styles.optionActive : ""}`}
                   onClick={() => setThermal("max")}
                 >
@@ -133,19 +133,19 @@ export default function GlassConfigurator() {
             <div className={styles.controlGroup}>
               <div className={styles.groupLabel}>Controlo Solar (Calor Estival)</div>
               <div className={styles.optionsRow}>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${solar === "none" ? styles.optionActive : ""}`}
                   onClick={() => setSolar("none")}
                 >
                   Não Necessário
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${solar === "medium" ? styles.optionActive : ""}`}
                   onClick={() => setSolar("medium")}
                 >
                   Médio (Fator g 40%)
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${solar === "high" ? styles.optionActive : ""}`}
                   onClick={() => setSolar("high")}
                 >
@@ -158,19 +158,19 @@ export default function GlassConfigurator() {
             <div className={styles.controlGroup}>
               <div className={styles.groupLabel}>Segurança Física (Impacto/Intrusão)</div>
               <div className={styles.optionsRow}>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${safety === "normal" ? styles.optionActive : ""}`}
                   onClick={() => setSafety("normal")}
                 >
                   Básica
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${safety === "people" ? styles.optionActive : ""}`}
                   onClick={() => setSafety("people")}
                 >
                   Proteção Pessoas
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${safety === "intrusion" ? styles.optionActive : ""}`}
                   onClick={() => setSafety("intrusion")}
                 >
@@ -183,19 +183,19 @@ export default function GlassConfigurator() {
             <div className={styles.controlGroup}>
               <div className={styles.groupLabel}>Isolamento Acústico (Ruído)</div>
               <div className={styles.optionsRow}>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${acoustic === "normal" ? styles.optionActive : ""}`}
                   onClick={() => setAcoustic("normal")}
                 >
                   Padrão (Rw ~32dB)
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${acoustic === "high" ? styles.optionActive : ""}`}
                   onClick={() => setAcoustic("high")}
                 >
                   Elevado (Rw ~37dB)
                 </button>
-                <button 
+                <button
                   className={`${styles.optionBtn} ${acoustic === "extreme" ? styles.optionActive : ""}`}
                   onClick={() => setAcoustic("extreme")}
                 >
@@ -209,7 +209,7 @@ export default function GlassConfigurator() {
           {/* Right panel result card */}
           <AnimatePresence mode="wait">
             {recommendation && (
-              <motion.div 
+              <motion.div
                 className={`glass-card ${styles.resultCard}`}
                 key={recommendation.title}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -227,8 +227,8 @@ export default function GlassConfigurator() {
                   {recommendation.panes.map((pane, idx) => {
                     if (pane.isSpacer) {
                       return (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           className={styles.spacerBar}
                           style={{ width: "40px" }}
                         >
@@ -237,10 +237,10 @@ export default function GlassConfigurator() {
                       );
                     }
                     return (
-                      <div 
+                      <div
                         key={idx}
                         className={styles.pane}
-                        style={{ 
+                        style={{
                           width: pane.thickness.includes("33.1") || pane.thickness.includes("44.2") || pane.thickness.includes("44.4") ? "24px" : "14px",
                           backgroundColor: pane.color,
                           border: "1.5px solid rgba(255,255,255,0.4)"
