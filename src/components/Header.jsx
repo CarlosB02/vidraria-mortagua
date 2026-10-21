@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Menu, X, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import styles from "./Header.module.css";
@@ -67,6 +68,9 @@ export default function Header() {
               ))}
             </div>
           </div>
+          <Link href="/dashboard" className={styles.portalBtn}>
+            Dashboard
+          </Link>
         </div>
 
         {/* Mobile Menu Button */}
@@ -107,6 +111,13 @@ export default function Header() {
             </div>
           ))}
         </div>
+        <Link 
+          href="/dashboard" 
+          className={styles.mobilePortalBtn}
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          Dashboard
+        </Link>
       </div>
     </header>
   );

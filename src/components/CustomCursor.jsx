@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import styles from "./CustomCursor.module.css";
 
 export default function CustomCursor() {
+  const pathname = usePathname();
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
@@ -65,6 +67,10 @@ export default function CustomCursor() {
       window.removeEventListener("mouseover", handleMouseOver);
     };
   }, [isVisible, cursorX, cursorY]);
+
+  if (pathname && pathname.startsWith('/dashboard')) {
+    return null;
+  }
 
   if (isTouchDevice || !isVisible) {
     return null;
