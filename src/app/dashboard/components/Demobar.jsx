@@ -28,7 +28,7 @@ export default function Demobar() {
   };
 
   // Ocultado temporariamente para deploy na Vercel (alterar para true para reativar)
-  const SHOW_ADMIN = false;
+  const SHOW_ADMIN = true;
 
   const allViews = [
     ['escritorio', 'monitor', 'Escritório'],
