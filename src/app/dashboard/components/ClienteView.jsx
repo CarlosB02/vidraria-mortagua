@@ -7,6 +7,7 @@ import {
   IMG,
   VM_TEL,
   TIPOS_CAV,
+  PRAZO,
 } from '../data/constants';
 import {
   resumo,
@@ -471,7 +472,7 @@ export default function ClienteView() {
 
     const allLots = L.flatMap(z => z.r.lots.map(l => ({ ...l, o: z.x })));
     const late = allLots.filter(l => l.dias < 0).reduce((n, l) => n + l.qtd, 0);
-    const soon = allLots.filter(l => l.dias >= 0 && l.dias <= 30).reduce((n, l) => n + l.qtd, 0);
+    const soon = allLots.filter(l => l.dias >= 0 && l.dias <= 10).reduce((n, l) => n + l.qtd, 0);
     const cam = L.reduce((n, z) => n + z.r.transito, 0);
     const prox = allLots.filter(l => l.dias >= 0).sort((a, b) => a.dias - b.dias)[0];
 
@@ -500,7 +501,7 @@ export default function ClienteView() {
             </div>
             <div className={`cd-st ${soon > 0 ? 'soon' : ''}`}>
               <span className="num">{soon}</span>
-              <small>a terminar em 30 dias</small>
+              <small>a terminar em 10 dias</small>
             </div>
             <div className="cd-st">
               <span className="num">{cam}</span>
@@ -542,7 +543,7 @@ export default function ClienteView() {
                   <div className="bar" role="img" aria-label="Progresso do prazo">
                     <i
                       style={{
-                        width: `${Math.max(4, Math.min(100, (1 - ro.dias / 183) * 100))}%`,
+                        width: `${Math.max(4, Math.min(100, (1 - ro.dias / PRAZO) * 100))}%`,
                         background: ST[ro.st].soft,
                       }}
                     />

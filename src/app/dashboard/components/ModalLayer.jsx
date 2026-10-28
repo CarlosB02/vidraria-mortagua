@@ -69,7 +69,7 @@ export default function ModalLayer() {
       const inv = inventario(obras, movs);
       setNovaState({
         obraId: modal.obraId || null,
-        q: '',
+        q: modal.empresa || '',
         nova: null,
         nums: modal.nums || [],
         cq: '',
@@ -700,7 +700,7 @@ export default function ModalLayer() {
                       </button>
                     </div>
                     <div className="mb">
-                      <div className="chips">
+                      <div className="chips-seg">
                         {[
                           ['amigavel', 'Lembrete amigável'],
                           ['terminado', 'Prazo terminado'],
@@ -819,8 +819,7 @@ export default function ModalLayer() {
                               <Icon name="cav" />
                             </button>
                           </div>
-                          <span className="num">{X.V.length}</span>
-                          <small>registou</small>
+                          <span className="rbv"><span className="num">{X.V.length}</span><small>registou</small></span>
                         </div>
 
                         {/* Motorista */}
@@ -837,8 +836,7 @@ export default function ModalLayer() {
                               <Icon name="cav" />
                             </button>
                           </div>
-                          <span className="num">{X.MO.length}</span>
-                          <small>carregou</small>
+                          <span className="rbv"><span className="num">{X.MO.length}</span><small>carregou</small></span>
                         </div>
 
                         {/* Cliente */}
@@ -855,8 +853,7 @@ export default function ModalLayer() {
                               <Icon name="cav" />
                             </button>
                           </div>
-                          <span className="num">{X.C.length}</span>
-                          <small>assinou</small>
+                          <span className="rbv"><span className="num">{X.C.length}</span><small>assinou</small></span>
                         </div>
                       </div>
 
@@ -1079,7 +1076,9 @@ export default function ModalLayer() {
           {modal.type === 'recolha' && (
             <>
               {(() => {
-                const o = obras.find(x => x.id === modal.obraId);
+                const empObras = modal.empresa ? obras.filter(x => x.empresa === modal.empresa) : [];
+                const targetObraId = modal.obraId || (empObras.find(x => resumo(x, movs).total > 0) || empObras[0])?.id;
+                const o = obras.find(x => x.id === targetObraId);
                 const r = o ? resumo(o, movs) : { total: 0 };
                 return (
                   <>
@@ -1090,6 +1089,29 @@ export default function ModalLayer() {
                       </button>
                     </div>
                     <div className="mb">
+                      {modal.empresa && empObras.length > 1 && (
+                        <div className="field" style={{ marginBottom: '16px' }}>
+                          <label htmlFor="rec-obra-sel">Obra da empresa</label>
+                          <select
+                            id="rec-obra-sel"
+                            value={targetObraId || ''}
+                            onChange={e => {
+                              const nextO = obras.find(x => x.id === e.target.value);
+                              const nextR = nextO ? resumo(nextO, movs) : { total: 0 };
+                              setModal(m => ({ ...m, obraId: e.target.value, qty: nextR.total || 1 }));
+                            }}
+                          >
+                            {empObras.map(x => {
+                              const tot = resumo(x, movs).total;
+                              return (
+                                <option key={x.id} value={x.id}>
+                                  {x.nome} ({tot} cavalete{tot === 1 ? '' : 's'})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      )}
                       <p><b>{o?.nome}</b> tem {r.total} cavaletes.</p>
                       <div className="stepper">
                         <button
@@ -1106,7 +1128,7 @@ export default function ModalLayer() {
                             inputMode="numeric"
                             maxLength={4}
                             onChange={e => {
-                              const v = Math.min(r.total, Math.max(1, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1));
+                              const v = Math.min(Math.max(1, r.total), Math.max(1, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1));
                               setModal(m => ({ ...m, qty: v }));
                             }}
                           />
@@ -1115,7 +1137,7 @@ export default function ModalLayer() {
                         <button
                           type="button"
                           aria-label="Mais um"
-                          onClick={() => setModal(m => ({ ...m, qty: Math.min(r.total, (m.qty || 1) + 1) }))}
+                          onClick={() => setModal(m => ({ ...m, qty: Math.min(Math.max(1, r.total), (m.qty || 1) + 1) }))}
                         >
                           <Icon name="plus" />
                         </button>
@@ -1128,7 +1150,8 @@ export default function ModalLayer() {
                       <button
                         type="button"
                         className="btn btn-primary"
-                        onClick={() => registarRecolha({ obraId: modal.obraId, qty: modal.qty || 1 })}
+                        disabled={!o || r.total === 0}
+                        onClick={() => registarRecolha({ obraId: o?.id, qty: modal.qty || 1 })}
                       >
                         <Icon name="check" />
                         <span>Registar {modal.qty || 1} cavaletes</span>

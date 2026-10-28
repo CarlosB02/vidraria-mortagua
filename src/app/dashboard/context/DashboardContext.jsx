@@ -9,6 +9,7 @@ import {
   STAFF,
   MOT_TEL,
   CLIENTE_DEMO,
+  PRAZO,
   isoD,
   addDays,
   addMonths,
@@ -36,6 +37,46 @@ export function DashboardProvider({ children }) {
   const [view, setViewState] = useState('escritorio');
   const [page, setPageState] = useState('inicio');
   const [obraId, setObraId] = useState(null);
+  const [emp, setEmp] = useState(null);
+  const [empFrom, setEmpFrom] = useState(null);
+  const [ohist, setOhist] = useState([]);
+
+  // Navegação com histórico (Ficha de Obra / Ficha de Empresa)
+  const openObra = useCallback((id) => {
+    setOhist(prev => [...prev, { page, obraId, emp, empFrom }]);
+    setObraId(id);
+    setEmp(null);
+    setPageState('obras');
+    window.scrollTo(0, 0);
+  }, [page, obraId, emp, empFrom]);
+
+  const openEmpresa = useCallback((empName) => {
+    setOhist(prev => [...prev, { page, obraId, emp, empFrom }]);
+    setEmp(empName);
+    setEmpFrom(obraId);
+    setObraId(null);
+    setPageState('obras');
+    window.scrollTo(0, 0);
+  }, [page, obraId, emp, empFrom]);
+
+  const goBack = useCallback(() => {
+    setOhist(prev => {
+      if (!prev.length) {
+        setObraId(null);
+        setEmp(null);
+        setEmpFrom(null);
+        return [];
+      }
+      const next = [...prev];
+      const last = next.pop();
+      setObraId(last.obraId || null);
+      setEmp(last.emp || null);
+      setEmpFrom(last.empFrom || null);
+      if (last.page) setPageState(last.page);
+      window.scrollTo(0, 0);
+      return next;
+    });
+  }, []);
 
   // Filtros escritório
   const [filtro, setFiltro] = useState('todas');
@@ -51,7 +92,7 @@ export function DashboardProvider({ children }) {
   const [psize, setPsize] = useState('n');
   const [psOpen, setPsOpen] = useState(false);
   const [auto, setAuto] = useState({ d30: true, d7: true, d0: true, sem: false });
-  const [currentUser] = useState('João Santos');
+  const [currentUser] = useState('Cristiana');
 
   // Inventário cavaletes
   const [cav, setCav] = useState({ tipo: 'todos', est: 'todos', q: '', lim: 20 });
@@ -276,6 +317,14 @@ export function DashboardProvider({ children }) {
       if (!mov) return prev;
       const X = resLists(mov, prev.obras, prev.movs);
       const chosenList = (pickOption === 'A' ? X.V : X.C).slice();
+      const resolvido = {
+        d: TODAY,
+        por: currentUser,
+        q: chosenList.length,
+        volta: pickOption === 'B' ? X.falta.length : 0,
+        mais: pickOption === 'B' ? X.mais.length : 0,
+        cli: pickOption === 'A',
+      };
 
       return {
         ...prev,
@@ -290,6 +339,7 @@ export function DashboardProvider({ children }) {
             qtdMot: chosenList.length,
             qtdCli: chosenList.length,
             estado: 'entregue',
+            resolvido,
           };
         }),
       };
@@ -297,7 +347,7 @@ export function DashboardProvider({ children }) {
 
     closeModal();
     showToast('Diferença resolvida e stock atualizado.');
-  }, [closeModal, showToast]);
+  }, [closeModal, showToast, currentUser]);
 
   // TODO: API - Motorista confirmar carga
   const motoristaConfirmarCarga = useCallback(({ movId, numsMot }) => {
@@ -429,7 +479,7 @@ export function DashboardProvider({ children }) {
       done: {
         t: 'Obrigado!',
         s: ok
-          ? `Fica registado: recebeu ${numsCli.length} cavaletes. Tem agora ${r.total} na obra. Devolver estes até ${fd(addMonths(TODAY, 6))}.`
+          ? `Fica registado: recebeu ${numsCli.length} cavaletes. Tem agora ${r.total} na obra. Devolver estes até ${fd(addDays(TODAY, PRAZO))}.`
           : `Registámos ${numsCli.length} cavaletes. A Vidraria foi avisada da diferença e vai contactá-lo.`,
       },
       sig: null,
@@ -526,6 +576,14 @@ export function DashboardProvider({ children }) {
     setPageState,
     obraId,
     setObraId,
+    emp,
+    setEmp,
+    empFrom,
+    setEmpFrom,
+    ohist,
+    openObra,
+    openEmpresa,
+    goBack,
     filtro,
     setFiltro,
     q,

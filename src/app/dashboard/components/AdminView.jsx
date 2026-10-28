@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Icon } from '../data/icons';
 import {
@@ -8,8 +8,11 @@ import {
   DIAS,
   FROTA,
   TIPOS_CAV,
+  MESES_L,
   fdl,
   fd,
+  isoD,
+  addDays,
 } from '../data/constants';
 import {
   totals,
@@ -27,6 +30,7 @@ import {
   rel,
   resLists,
   tipoDe,
+  parseIso,
 } from '../data/logic';
 import MapaPortugal from './MapaPortugal';
 import EscritorioView from './EscritorioView';
@@ -43,6 +47,8 @@ export default function AdminView() {
     obras,
     movs,
     pedidos,
+    lembretes,
+    auto,
     fin,
     updateFinanca,
     af,
@@ -61,6 +67,9 @@ export default function AdminView() {
     currentUser,
   } = useDashboard();
 
+  const [ar, setAr] = useState({ k: '30', open: false, m: null, de: null, ate: null });
+  const [aq, setAq] = useState('');
+
   const t = totals(obras, movs);
   const inv = inventario(obras, movs);
 
@@ -78,12 +87,12 @@ export default function AdminView() {
   const c = invCounts();
 
   const ageBar = d => {
-    const w = Math.min(100, (d / 240) * 100);
-    const col = d > 180 ? 'var(--late)' : d > 150 ? 'var(--warn)' : d > 90 ? 'var(--info)' : 'var(--ok)';
+    const w = Math.min(100, (d / 80) * 100);
+    const col = d > 60 ? 'var(--late)' : d > 50 ? 'var(--warn)' : d > 30 ? 'var(--info)' : 'var(--ok)';
     return (
       <span className="agebar">
         <i style={{ width: `${w}%`, background: col }} />
-        <b style={{ left: `${(180 / 240) * 100}%` }} />
+        <b style={{ left: `${(60 / 80) * 100}%` }} />
       </span>
     );
   };
@@ -137,7 +146,7 @@ export default function AdminView() {
             <p className="date">{DIAS[TODAY.getDay()]}, {fdl(TODAY)}</p>
             <h1 className="ph">
               <span className="phi"><Icon name="home" /></span>
-              <span>{new Date().getHours() < 13 ? 'Bom dia' : new Date().getHours() < 20 ? 'Boa tarde' : 'Boa noite'}, Helena</span>
+              <span>{new Date().getHours() < 13 ? 'Bom dia' : new Date().getHours() < 20 ? 'Boa tarde' : 'Boa noite'}, Sr. Nuno</span>
             </h1>
           </div>
         </div>
@@ -263,25 +272,6 @@ export default function AdminView() {
             </div>
           </section>
         </div>
-
-        <section className="card" style={{ marginTop: '18px' }}>
-          <div className="card-h">
-            <h2>Clientes que mais demoram a devolver</h2>
-            <button
-              type="button"
-              className="linkbtn"
-              onClick={() => {
-                setPageState('clientes');
-                window.scrollTo(0, 0);
-              }}
-            >
-              Ver ranking <Icon name="right" />
-            </button>
-          </div>
-          <div className="card-b">
-            {rankList(topClientes, 1)}
-          </div>
-        </section>
       </>
     );
   }
@@ -490,7 +480,7 @@ export default function AdminView() {
             </div>
             <div className="card-b">
               <p className="muted" style={{ fontSize: '0.9rem' }}>
-                Se cobrassem <b>{fmtEUR(fin.taxa)}</b> por cavalete, por cada mês (ou parte) além dos 6 meses:
+                Se cobrassem <b>{fmtEUR(fin.taxa)}</b> por cavalete, por cada mês (ou parte) além dos 60 dias:
               </p>
               <p className="fin-big num">{fmtEUR(cobranca)}</p>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
@@ -571,17 +561,103 @@ export default function AdminView() {
 
   // ================= PÁGINA ATIVIDADE =================
   if (page === 'atividade') {
-    const allEvents = atividade(obras, movs, pedidos, currentUser);
-    const filteredEvents = af === 'todos' ? allEvents : allEvents.filter(e => e.g === af);
-    const shownEvents = filteredEvents.slice(0, alim);
-
-    const GMap = {
-      esc: ['Escritório', 'info'],
-      mot: ['Motorista', 'warn'],
-      cli: ['Cliente', 'ok'],
+    const arRange = () => {
+      const t = TODAY;
+      const d = n => addDays(t, -n);
+      if (ar.k === 'hoje') return [t, t, 'Hoje'];
+      if (ar.k === '7') return [d(6), t, 'Últimos 7 dias'];
+      if (ar.k === '30') return [d(29), t, 'Últimos 30 dias'];
+      if (ar.k === 'mes') return [new Date(t.getFullYear(), t.getMonth(), 1), t, 'Este mês'];
+      if (ar.k === 'pers' && ar.de) {
+        const a = parseIso(ar.de);
+        const b = ar.ate ? parseIso(ar.ate) : a;
+        return [a, b, ar.ate && ar.ate !== ar.de ? `${fd(a)} – ${fd(b)}` : fd(a)];
+      }
+      return [null, null, 'Desde sempre'];
     };
 
-    let lastDay = '';
+    const arCal = () => {
+      const v = parseIso(ar.m || isoD(TODAY));
+      const y = v.getFullYear();
+      const mo = v.getMonth();
+      const off = (new Date(y, mo, 1).getDay() + 6) % 7;
+      const n = new Date(y, mo + 1, 0).getDate();
+      const t = isoD(TODAY);
+
+      const blanks = Array.from({ length: off }, (_, i) => <span key={`b-${i}`} />);
+      const days = [];
+      for (let d = 1; d <= n; d++) {
+        const iso = isoD(new Date(y, mo, d));
+        const fut = iso > t;
+        const a = ar.k === 'pers' && ar.de;
+        const b = ar.ate || ar.de;
+        const sel = a && (iso === ar.de || iso === b);
+        const inr = a && iso > ar.de && iso < b;
+        days.push(
+          <button
+            key={iso}
+            type="button"
+            className={`cd${sel ? ' sel' : ''}${inr ? ' inr' : ''}${iso === t ? ' today' : ''}`}
+            disabled={fut}
+            onClick={() => {
+              if (!ar.de || (ar.de && ar.ate)) {
+                setAr(prev => ({ ...prev, k: 'pers', de: iso, ate: null }));
+              } else {
+                if (iso < ar.de) {
+                  setAr(prev => ({ ...prev, k: 'pers', de: iso, ate: prev.de, open: false }));
+                } else {
+                  setAr(prev => ({ ...prev, k: 'pers', ate: iso, open: false }));
+                }
+              }
+            }}
+          >
+            {d}
+          </button>
+        );
+      }
+
+      return (
+        <div className="arcal">
+          <div className="calhd">
+            <button
+              type="button"
+              className="calnav"
+              aria-label="Mês anterior"
+              onClick={() => setAr(prev => ({ ...prev, m: isoD(new Date(y, mo - 1, 1)) }))}
+            >
+              <Icon name="left" />
+            </button>
+            <b>{MESES_L[mo]} <span>{y}</span></b>
+            <button
+              type="button"
+              className="calnav"
+              aria-label="Mês seguinte"
+              onClick={() => setAr(prev => ({ ...prev, m: isoD(new Date(y, mo + 1, 1)) }))}
+            >
+              <Icon name="right" />
+            </button>
+          </div>
+          <div className="calwd">
+            {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((x, i) => <span key={i}>{x}</span>)}
+          </div>
+          <div className="calgrid">
+            {blanks}
+            {days}
+          </div>
+          <p className="ar-hint">{ar.k === 'pers' && ar.de && !ar.ate ? 'Escolha o último dia' : 'Escolha o primeiro dia'}</p>
+        </div>
+      );
+    };
+
+    const [r0, r1, rl] = arRange();
+    const all = atividade(obras, movs, pedidos, currentUser, lembretes, auto).filter(
+      e => !r0 || (e.d >= r0 && e.d <= r1)
+    );
+    const f = af || 'todos';
+    const qn = norm((aq || '').trim());
+    const L0 = f === 'todos' ? all : all.filter(e => e.g === f || (f === 'esc' && e.g === 'sis'));
+    const L = qn ? L0.filter(e => norm([e.quem, e.papel, e.titulo, e.desc, e.guia || '', e.obra].join(' ')).includes(qn)) : L0;
+    const shown = L.slice(0, alim);
 
     return (
       <>
@@ -589,239 +665,136 @@ export default function AdminView() {
           <div>
             <h1 className="ph">
               <span className="phi"><Icon name="clock" /></span>
-              <span>Atividade</span>
+              <span>Registo de Atividades</span>
             </h1>
           </div>
         </div>
 
-        <div className="chips" style={{ marginBottom: '14px' }}>
-          {[
-            ['todos', 'Tudo'],
-            ['esc', 'Escritório'],
-            ['mot', 'Motoristas'],
-            ['cli', 'Clientes'],
-          ].map(([k, l]) => (
+        <div className="atbar atbox">
+          <span className="atl-lab">Filtrar por</span>
+          <div className="atseg">
+            {[
+              ['todos', 'Todos', ''],
+              ['esc', 'Escritório', 'monitor'],
+              ['mot', 'Motoristas', 'truck'],
+              ['cli', 'Clientes', 'user'],
+            ].map(([k, l, i]) => (
+              <button
+                key={k}
+                type="button"
+                className={`atsb g-${k}`}
+                aria-pressed={f === k}
+                onClick={() => {
+                  setAf(k);
+                  setAlim(25);
+                }}
+              >
+                {i && <Icon name={i} />}
+                {l}
+              </button>
+            ))}
+          </div>
+
+          <div className="arw" style={{ position: 'relative' }}>
             <button
-              key={k}
               type="button"
-              className="chip"
-              aria-pressed={af === k}
-              onClick={() => {
-                setAf(k);
-                setAlim(25);
-              }}
+              className={`arbtn${ar.open ? ' open' : ''}`}
+              aria-expanded={ar.open}
+              onClick={() => setAr(prev => ({ ...prev, open: !prev.open }))}
             >
-              {l}
+              <Icon name="cal" />
+              <span>{rl}</span>
+              <svg className="calch" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
-          ))}
+            {ar.open && (
+              <div className="arpop">
+                <div className="arpre">
+                  {[
+                    ['hoje', 'Hoje'],
+                    ['7', 'Últimos 7 dias'],
+                    ['30', 'Últimos 30 dias'],
+                    ['mes', 'Este mês'],
+                    ['tudo', 'Desde sempre'],
+                  ].map(([k, l]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={ar.k === k}
+                      onClick={() => {
+                        setAr(prev => ({ ...prev, k, open: false, de: null, ate: null }));
+                      }}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                {arCal()}
+              </div>
+            )}
+          </div>
+
+          <div className="atq cbox">
+            <Icon name="search" />
+            <input
+              id="aq"
+              placeholder="Pesquisar guia, pessoa…"
+              value={aq}
+              onChange={e => setAq(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
         </div>
 
         <section className="card">
           <div className="card-b">
-            <div className="alog">
-              {shownEvents.map((e, idx) => {
-                const dayText = fd(e.d);
-                const showHeader = dayText !== lastDay;
-                lastDay = dayText;
-
-                return (
-                  <React.Fragment key={idx}>
-                    {showHeader && (
-                      <p className="alog-d">
-                        {e.d.getTime() === TODAY.getTime() ? 'Hoje' : dayText}
-                      </p>
-                    )}
-                    <div className="alog-i">
-                      <span className={`cav g-${e.g}`}>{iniciais(e.quem)}</span>
-                      <div>
-                        <p>
-                          <b>{e.quem}</b> <span dangerouslySetInnerHTML={{ __html: e.t }} />
-                        </p>
-                        <span className={`pill tone-${GMap[e.g][1]}`}>{GMap[e.g][0]}</span>
-                      </div>
-                      <span className="alog-ic"><Icon name={e.ic} /></span>
+            <div className="atl">
+              {shown.length === 0 ? (
+                <p className="muted" style={{ padding: '18px 0', textAlign: 'center' }}>
+                  Sem atividade neste período.
+                </p>
+              ) : (
+                shown.map((e, idx) => {
+                  const hh = String(Math.floor(e.mi / 60)).padStart(2, '0');
+                  const mm = String(e.mi % 60).padStart(2, '0');
+                  return (
+                    <div key={idx} className={`atl-i g-${e.g}`}>
+                      <span className="atl-dot" />
+                      <article className="atl-c">
+                        <header>
+                          <span className="atl-tag">{e.quem} ({e.papel})</span>
+                          <b>{e.titulo}</b>
+                          <time dateTime={`${isoD(e.d)}T${hh}:${mm}`}>
+                            <Icon name="clock" />
+                            <span>{fd(e.d)}</span>
+                            <b>{hh}:{mm}</b>
+                          </time>
+                        </header>
+                        <p>{e.desc}</p>
+                        <footer>
+                          {e.guia && <span className="atl-code">{e.guia}</span>}
+                          <span>Obra: <b>{e.obra}</b></span>
+                          {e.q > 0 && <span>· <b>{e.q} cavaletes</b></span>}
+                        </footer>
+                      </article>
                     </div>
-                  </React.Fragment>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
 
-            <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
-              <span className="muted" style={{ fontSize: '0.88rem' }}>
-                A mostrar {shownEvents.length} de {filteredEvents.length}
-              </span>
-              {filteredEvents.length > shownEvents.length && (
+            {L.length > shown.length && (
+              <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
+                <span className="muted" style={{ fontSize: '0.88rem' }}>
+                  A mostrar {shown.length} de {L.length}
+                </span>
                 <button
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => setAlim(l => l + 25)}
                 >
                   <Icon name="plus" />Ver mais 25
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-      </>
-    );
-  }
-
-  // ================= PÁGINA ACESSOS / EQUIPA =================
-  if (page === 'equipa') {
-    const allEv = atividade(obras, movs, pedidos, currentUser);
-    const lastSeen = n => {
-      const e = allEv.find(x => x.quem === n || x.quem === 'Sr. ' + n);
-      return e ? rel(e.d) : '—';
-    };
-    const countOps = n => allEv.filter(x => x.quem === n || x.quem === 'Sr. ' + n).length;
-
-    const renderToggle = (id, label) => {
-      const on = acessoMap[id] !== false;
-      return (
-        <button
-          type="button"
-          className="tgl"
-          role="switch"
-          aria-checked={on}
-          aria-label={`Acesso de ${label}`}
-          onClick={() => toggleAcesso(id)}
-        >
-          <i />
-        </button>
-      );
-    };
-
-    const renderRow = (id, n, papel, tone, sub) => (
-      <div key={id} className={`prow ${acessoMap[id] === false ? 'off' : ''}`}>
-        <span className={`cav g-${tone}`}>{iniciais(n)}</span>
-        <div className="pt">
-          <b>{n}</b>
-          <span>{sub}</span>
-        </div>
-        <span className={`pill tone-${tone === 'esc' ? 'info' : tone === 'mot' ? 'warn' : 'ok'}`}>
-          {papel}
-        </span>
-        <div className="pact">
-          <b className="num">{countOps(n)}</b>
-          <small>registos · {lastSeen(n)}</small>
-        </div>
-        {renderToggle(id, n)}
-      </div>
-    );
-
-    const emps = [...new Set(obras.filter(o => resumo(o, movs).total > 0).map(o => o.empresa))].sort();
-    const cl = emps.flatMap(e => cliPessoas(e, obras, movs).map(p => ({ ...p, emp: e })));
-    const normPq = norm(pq.trim());
-    const clFiltered = cl.filter(p => !normPq || norm(p.nome + ' ' + p.emp).includes(normPq));
-    const shownCli = clFiltered.slice(0, plim);
-
-    const totalInativos = Object.values(acessoMap).filter(v => v === false).length;
-    const totalPessoas = staffList.length + motoristasList.length + cl.length;
-
-    return (
-      <>
-        <div className="pagehead">
-          <div>
-            <h1 className="ph">
-              <span className="phi"><Icon name="users" /></span>
-              <span>Acessos</span>
-            </h1>
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => openModal({ type: 'addp' })}
-          >
-            <Icon name="plus" />Adicionar pessoa
-          </button>
-        </div>
-
-        <div className="kpis">
-          <div className="kpi">
-            <span className="top"><Icon name="monitor" />Escritório</span>
-            <span className="kvr"><span className="v num">{staffList.length}</span></span>
-          </div>
-          <div className="kpi">
-            <span className="top"><Icon name="truck" />Motoristas</span>
-            <span className="kvr"><span className="v num">{motoristasList.length}</span></span>
-          </div>
-          <div className="kpi">
-            <span className="top"><Icon name="user" />Clientes</span>
-            <span className="kvr">
-              <span className="v num">{cl.length}</span>
-              <small>{emps.length} empresas</small>
-            </span>
-          </div>
-          <div className="kpi">
-            <span className="top"><Icon name="check" />Ativos</span>
-            <span className="kvr"><span className="v num">{totalPessoas - totalInativos}</span></span>
-          </div>
-        </div>
-
-        <section className="card" style={{ marginTop: '18px' }}>
-          <div className="card-h">
-            <h2>Escritório</h2>
-          </div>
-          <div className="card-b">
-            {staffList.map(p => renderRow('s:' + p.nome, p.nome, p.papel, 'esc', p.tel))}
-          </div>
-        </section>
-
-        <section className="card" style={{ marginTop: '18px' }}>
-          <div className="card-h">
-            <h2>Motoristas</h2>
-            <span className="muted" style={{ fontSize: '0.85rem' }}>
-              Só aparecem aqui os motoristas que podem receber cargas
-            </span>
-          </div>
-          <div className="card-b">
-            {motoristasList.map((m, i) =>
-              renderRow('m:' + m, m, 'Motorista', 'mot', MOT_TEL[m] || '—')
-            )}
-          </div>
-        </section>
-
-        <section className="card" style={{ marginTop: '18px' }}>
-          <div className="card-h">
-            <h2>Clientes</h2>
-            <div className="cbox" style={{ minHeight: '40px', maxWidth: '280px' }}>
-              <Icon name="search" />
-              <input
-                id="pq"
-                placeholder="Procurar pessoa ou empresa"
-                value={pq}
-                onChange={e => {
-                  setPq(e.target.value);
-                  setPlim(8);
-                }}
-              />
-            </div>
-          </div>
-          <div className="card-b">
-            {shownCli.length === 0 ? (
-              <p className="muted">Ninguém encontrado.</p>
-            ) : (
-              shownCli.map(p =>
-                renderRow(
-                  'c:' + p.emp + ':' + p.nome,
-                  p.nome,
-                  p.papel === 'Gestor' ? 'Gestor' : 'Encarregado',
-                  'cli',
-                  `${p.emp} · ${p.ids.length} obra${p.ids.length > 1 ? 's' : ''}`
-                )
-              )
-            )}
-            {clFiltered.length > shownCli.length && (
-              <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
-                <span className="muted" style={{ fontSize: '0.88rem' }}>
-                  A mostrar {shownCli.length} de {clFiltered.length}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setPlim(l => l + 8)}
-                >
-                  <Icon name="plus" />Ver mais 8
                 </button>
               </div>
             )}

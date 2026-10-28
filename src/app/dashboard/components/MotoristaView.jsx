@@ -330,7 +330,7 @@ export default function MotoristaView() {
           minhas.map(m => {
             const o = obras.find(x => x.id === m.obraId);
             return (
-              <div key={m.id} className="pcard">
+              <div key={m.id} className="pcard pgrad">
                 <div className="row">
                   <div>
                     <b style={{ fontSize: '1.05em' }}>{o?.nome}</b>
@@ -404,7 +404,7 @@ export default function MotoristaView() {
             {viagem.map(m => {
               const o = obras.find(x => x.id === m.obraId);
               return (
-                <div key={m.id} className="pcard">
+                <div key={m.id} className="pcard pgrad">
                   <div className="row">
                     <div>
                       <b>{o?.nome}</b>

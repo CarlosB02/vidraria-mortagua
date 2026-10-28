@@ -12,6 +12,8 @@ export default function Sidebar() {
     page,
     setPageState,
     setObraId,
+    setEmp,
+    setEmpFrom,
     setFiltro,
     setQ,
     setOgSel,
@@ -43,7 +45,6 @@ export default function Sidebar() {
     ['clientes', 'rank', 'Clientes', 'Clientes', null],
     ['financeiro', 'euro', 'Financeiro', 'Fin.', null],
     ['atividade', 'clock', 'Atividade', 'Ativ.', null],
-    ['equipa', 'users', 'Acessos', 'Acessos', null],
   ];
 
   const currentNav = view === 'admin' ? navAdmin : navEscritorio;
@@ -51,6 +52,8 @@ export default function Sidebar() {
   const handleNavClick = (targetPage) => {
     setPageState(targetPage);
     setObraId(null);
+    if (setEmp) setEmp(null);
+    if (setEmpFrom) setEmpFrom(null);
     setMlim(10);
     if (targetPage === 'obras') {
       setFiltro('todas');
@@ -63,6 +66,8 @@ export default function Sidebar() {
   const handleDefinicoesClick = () => {
     setPageState('definicoes');
     setObraId(null);
+    if (setEmp) setEmp(null);
+    if (setEmpFrom) setEmpFrom(null);
     window.scrollTo(0, 0);
   };
 
@@ -101,19 +106,16 @@ export default function Sidebar() {
 
       {view === 'admin' ? (
         <div className="me">
-          <span className="av">HC</span>
+          <span className="av">N</span>
           <span>
-            <b>Helena Costa</b>
+            <b>Sr. Nuno</b>
             <small>Administração · Sair</small>
           </span>
         </div>
       ) : (
         <div className="me">
           <span className="av">
-            {currentUser
-              .split(' ')
-              .map(w => w[0])
-              .join('')}
+            {currentUser === 'Cristiana' ? 'Cr' : currentUser === 'Catarina' ? 'Ca' : currentUser.slice(0, 2)}
           </span>
           <span>
             <b>{currentUser}</b>

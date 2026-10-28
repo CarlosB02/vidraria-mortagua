@@ -98,9 +98,9 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
               cy={y}
               r={rr}
               fill={st.color}
-              fillOpacity="0.8"
-              stroke="var(--surface)"
-              strokeWidth="1.2"
+              fillOpacity="1"
+              stroke="white"
+              strokeWidth="2.5"
               vectorEffect="non-scaling-stroke"
             />
           );
@@ -163,7 +163,9 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
   return (
     <>
       {preview ? (
-        renderSvg()
+        <div className="mapbox">
+          {renderSvg()}
+        </div>
       ) : (
         <div className="mapwrap" ref={wrapRef}>
           {renderSvg()}
@@ -240,10 +242,10 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
       )}
 
       <div className="legend">
-        <span><i style={{ background: 'var(--late)' }} />Terminado</span>
-        <span><i style={{ background: 'var(--warn)' }} />5–6 meses</span>
-        <span><i style={{ background: 'var(--info)' }} />3–5 meses</span>
-        <span><i style={{ background: 'var(--ok)' }} />&lt; 3 meses</span>
+        <span><i style={{ background: '#ef3340' }} />Terminado</span>
+        <span><i style={{ background: '#f59e0b' }} />50–60 dias</span>
+        <span><i style={{ background: '#3b82f6' }} />30–50 dias</span>
+        <span><i style={{ background: '#10b981' }} />&lt; 30 dias</span>
         {!preview && (
           <span><i style={{ background: 'var(--ink)', borderRadius: '2px' }} />Fábrica</span>
         )}

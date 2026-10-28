@@ -1,19 +1,24 @@
 import {
   TODAY,
   FROTA,
+  PRAZO,
   TIPOS_CAV,
   MESES,
   MESES_L,
+  LEMB_POR,
+  CLIENTE_DEMO,
+  NOMES,
+  addDays,
   addMonths,
   diffDays,
 } from './constants.js';
 
 export const ST = {
-  late: { label: 'Prazo terminado', tone: 'late', icon: 'alert', color: 'var(--late)', soft: 'var(--late-bar)' },
-  soon: { label: 'Termina em breve', tone: 'warn', icon: 'clock', color: 'var(--warn)', soft: 'var(--warn-bar)' },
-  watch: { label: 'A acompanhar', tone: 'info', icon: 'clock', color: 'var(--info)', soft: 'var(--info-bar)' },
-  ok: { label: 'Dentro do prazo', tone: 'ok', icon: 'check', color: 'var(--ok)', soft: 'var(--ok-bar)' },
-  vazia: { label: 'Sem cavaletes', tone: 'mut', icon: 'check', color: 'var(--muted)', soft: 'var(--line)' },
+  late:  { label: 'Prazo terminado', tone: 'late', icon: 'alert', color: '#ef3340', soft: 'var(--late-bar)', threshMin: 60 },
+  soon:  { label: '50–60 dias',      tone: 'warn', icon: 'clock', color: '#f59e0b', soft: 'var(--warn-bar)', threshMin: 50, threshMax: 60 },
+  watch: { label: '30–50 dias',      tone: 'info', icon: 'clock', color: '#3b82f6', soft: 'var(--info-bar)', threshMin: 30, threshMax: 50 },
+  ok:    { label: '< 30 dias',       tone: 'ok',   icon: 'check', color: '#10b981', soft: 'var(--ok-bar)',   threshMax: 30 },
+  vazia: { label: 'Sem cavaletes',   tone: 'mut',  icon: 'check', color: 'var(--muted)', soft: 'var(--line)' },
 };
 
 export const qEntregue = m => m.qtdCli ?? m.qtd;
@@ -32,7 +37,7 @@ export function lots(o, movs) {
     dev -= used;
     q -= used;
     if (q > 0) {
-      const prazo = addMonths(m.data, 6);
+      const prazo = addDays(m.data, PRAZO);
       out.push({ mov: m, data: m.data, qtd: q, prazo, dias: diffDays(prazo, TODAY) });
     }
   }
@@ -41,8 +46,9 @@ export function lots(o, movs) {
 
 export function stFor(d, dias) {
   if (dias < 0) return 'late';
-  if (TODAY >= addMonths(d, 5)) return 'soon';
-  if (TODAY >= addMonths(d, 3)) return 'watch';
+  const used = PRAZO - dias;
+  if (used >= 50) return 'soon';
+  if (used >= 30) return 'watch';
   return 'ok';
 }
 
@@ -281,80 +287,225 @@ export function clientesStats(obras, movs) {
     .sort((a, b) => b.avg - a.avg || b.late - a.late);
 }
 
-export function atividade(obras, movs, pedidos, currentUser) {
+export function atividade(
+  obras,
+  movs,
+  pedidos,
+  currentUser = 'Cristiana',
+  lembretes = {},
+  auto = { d30: true, d0: true }
+) {
   const ev = [];
+  const hr = (id, base, span) => {
+    let h = 0;
+    for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 9973;
+    return base * 60 + (h % (span * 60));
+  };
+  const ev0 = o => ev.push(o);
   const porDe = m =>
-    m.por || (m.nova ? currentUser : ['João Santos', 'Ana Ferreira'][parseInt(m.id.slice(1), 10) % 2]);
+    m.por || (m.nova ? currentUser : ['Cristiana', 'Catarina'][parseInt(String(m.id).replace(/\D/g, '') || '0', 10) % 2]);
 
   movs.forEach(m => {
     const o = obras.find(x => x.id === m.obraId);
     if (!o) return;
+    const obra = `${o.nome} · ${o.cidade}`;
     if (m.tipo === 'entrega') {
-      ev.push({
+      ev0({
         d: m.data,
-        o: 0,
+        mi: hr(m.id + 'a', 8, 2),
         quem: porDe(m),
+        papel: 'Escritório',
         g: 'esc',
-        t: `registou a entrega <b>${m.guia}</b> de ${m.qtd} cavaletes para ${esc(o.nome)}`,
-        ic: 'plus',
+        titulo: 'Registo de nova entrega',
+        desc: `Guia ${m.guia} de ${m.qtd} cavaletes para ${esc(o.nome)}. Enviada ao motorista Sr. ${esc(m.motorista)}.`,
+        guia: m.guia,
+        obra,
+        q: m.qtd,
       });
       if (m.qtdMot != null) {
-        ev.push({
+        const d = m.qtdMot - m.qtd;
+        ev0({
           d: m.data,
-          o: 1,
+          mi: hr(m.id + 'b', 10, 2),
           quem: 'Sr. ' + m.motorista,
+          papel: 'Motorista',
           g: 'mot',
-          t: `confirmou a carga de ${m.qtdMot} cavaletes · ${m.guia}`,
-          ic: 'truck',
+          titulo: 'Confirmação de carga',
+          desc: `Conferiu ${m.qtdMot} de ${m.qtd} cavaletes${d < 0 ? ` (faltaram ${-d})` : d > 0 ? ` (${d} a mais)` : ''}. Entrega a caminho da obra.`,
+          guia: m.guia,
+          obra,
+          q: m.qtdMot,
         });
       }
       if (m.assinatura) {
-        ev.push({
+        const dif = m.estado === 'divergencia';
+        ev0({
           d: m.data,
-          o: 2,
+          mi: hr(m.id + 'c', 13, 4),
           quem: m.assinatura,
+          papel: o.empresa,
           g: 'cli',
-          t: `assinou a receção de ${m.qtdCli} cavaletes em ${esc(o.nome)}`,
-          ic: 'pen',
+          titulo: dif ? 'Receção assinada com diferença' : 'Receção assinada',
+          desc: `Confirmou a receção de ${m.qtdCli} cavaletes${dif ? ` (enviados: ${m.qtdMot ?? m.qtd})` : ''}.${m.notaCli ? ` Nota: “${esc(m.notaCli)}”.` : ''}`,
+          guia: m.guia,
+          obra,
+          q: m.qtdCli,
         });
       }
     } else {
       if (m.estado === 'concluida') {
-        ev.push({
+        ev0({
           d: m.data,
-          o: 1,
+          mi: hr(m.id + 'd', 10, 6),
           quem: 'Sr. ' + m.motorista,
+          papel: 'Motorista',
           g: 'mot',
-          t: `registou a recolha de ${m.qtd} cavaletes em ${esc(o.nome)}`,
-          ic: 'recolha',
+          titulo: 'Recolha registada',
+          desc: `Recolheu ${m.qtd} cavaletes na obra.`,
+          guia: m.guia,
+          obra,
+          q: m.qtd,
         });
       } else if (m.motorista) {
-        ev.push({
+        ev0({
           d: m.data,
-          o: 0,
+          mi: hr(m.id + 'e', 8, 2),
           quem: porDe(m),
+          papel: 'Escritório',
           g: 'esc',
-          t: `marcou a recolha <b>${m.guia}</b> com o Sr. ${esc(m.motorista)}`,
-          ic: 'cal',
+          titulo: 'Recolha marcada',
+          desc: `Recolha de ${m.qtd} cavaletes atribuída ao Sr. ${esc(m.motorista)} para ${fd(m.data)}.`,
+          guia: m.guia,
+          obra,
+          q: m.qtd,
         });
       }
     }
   });
 
-  pedidos.forEach(p => {
-    const o = obras.find(x => x.id === p.obraId);
+  movs.forEach(m => {
+    if (!m.resolvido) return;
+    const o = obras.find(x => x.id === m.obraId);
     if (!o) return;
-    ev.push({
-      d: p.data,
-      o: 3,
-      quem: o.contacto,
-      g: 'cli',
-      t: `pediu a recolha de ${p.qtd} cavaletes em ${esc(o.nome)}`,
-      ic: 'hand',
+    const R = m.resolvido;
+    ev0({
+      d: R.d,
+      mi: hr(m.id + 'r', 9, 8),
+      quem: R.por || currentUser,
+      papel: 'Escritório',
+      g: 'esc',
+      titulo: 'Diferença resolvida',
+      desc: `${R.cli ? 'O cliente enganou-se na contagem. ' : ''}Ficaram ${R.q} cavaletes na obra.${R.volta ? ` ${R.volta} voltaram ao stock.` : ''}${R.mais ? ` ${R.mais} a mais confirmados na obra.` : ''}`,
+      guia: m.guia,
+      obra: `${o.nome} · ${o.cidade}`,
+      q: R.q,
     });
   });
 
-  return ev.filter(e => e.d <= TODAY).sort((a, b) => b.d - a.d || b.o - a.o);
+  obras.forEach(o => {
+    const lot = lots(o, movs);
+    const r = resumo(o, movs);
+    const ob = `${o.nome} · ${o.cidade}`;
+    lot.forEach(l => {
+      const d15 = addDays(l.prazo, -15);
+      if (auto.d30 && d15 <= TODAY) {
+        ev0({
+          d: d15,
+          mi: hr(o.id + l.mov.id + 'a', 7, 1),
+          quem: 'Email automático',
+          papel: 'Sistema',
+          g: 'sis',
+          titulo: 'Lembrete amigável enviado',
+          desc: `Faltam 15 dias para o prazo de ${l.qtd} cavaletes. Enviado para ${esc(o.email)}.`,
+          guia: l.mov.guia,
+          obra: ob,
+          q: l.qtd,
+        });
+      }
+      if (auto.d0 && l.prazo <= TODAY) {
+        ev0({
+          d: l.prazo,
+          mi: hr(o.id + l.mov.id + 'b', 7, 1),
+          quem: 'Email automático',
+          papel: 'Sistema',
+          g: 'sis',
+          titulo: 'Aviso de prazo terminado',
+          desc: `Terminou o prazo de ${l.qtd} cavaletes. Enviado para ${esc(o.email)}.`,
+          guia: l.mov.guia,
+          obra: ob,
+          q: l.qtd,
+        });
+      }
+    });
+
+    if (lembretes[o.id]) {
+      ev0({
+        d: lembretes[o.id],
+        mi: hr(o.id + 'm', 9, 8),
+        quem: LEMB_POR[o.id] || currentUser,
+        papel: 'Escritório',
+        g: 'esc',
+        titulo: 'Email enviado ao cliente',
+        desc: `Lembrete do prazo enviado para ${esc(o.email)}.`,
+        guia: null,
+        obra: ob,
+        q: r.total,
+      });
+    }
+
+    const first = movs.filter(m => m.obraId === o.id && m.tipo === 'entrega').sort((a, b) => a.data - b.data)[0];
+    const cr = o.criada || (first ? { d: first.data, por: porDe(first) } : null);
+    if (cr) {
+      ev0({
+        d: cr.d,
+        mi: first && !o.criada ? hr(first.id + 'a', 8, 2) - 5 : hr(o.id + 'c', 8, 8),
+        quem: cr.por,
+        papel: 'Escritório',
+        g: 'esc',
+        titulo: 'Obra nova criada',
+        desc: `${esc(o.nome)} (${esc(o.empresa)}), ${esc(o.morada)}, ${esc(o.cidade)}.`,
+        guia: null,
+        obra: ob,
+        q: 0,
+      });
+    }
+  });
+
+  pedidos.forEach(p => {
+    if (p.logDe) {
+      const o = obras.find(x => x.id === p.obraId);
+      if (o) {
+        ev0({
+          d: p.logDe,
+          mi: hr(p.id + 'l', 9, 6),
+          quem: p.logPor || porDe({ id: 'm' + p.id.slice(1), nova: false }),
+          papel: 'Escritório',
+          g: 'esc',
+          titulo: 'Folha de recolha enviada para a logística',
+          desc: `Recolha de ${p.qtd} cavaletes impressa e enviada para a logística.`,
+          guia: p.guia || (movs.find(m => m.id === p.movId) || {}).guia || null,
+          obra: `${o.nome} · ${o.cidade}`,
+          q: p.qtd,
+        });
+      }
+    }
+    const o = obras.find(x => x.id === p.obraId);
+    if (!o) return;
+    ev0({
+      d: p.data,
+      mi: hr(p.id + 'f', 14, 4),
+      quem: o.contacto,
+      papel: o.empresa,
+      g: 'cli',
+      titulo: 'Pedido de recolha',
+      desc: `Pediu a recolha de ${p.qtd} cavaletes.`,
+      guia: null,
+      obra: `${o.nome} · ${o.cidade}`,
+      q: p.qtd,
+    });
+  });
+
+  return ev.filter(e => e.d <= TODAY).sort((a, b) => b.d - a.d || b.mi - a.mi);
 }
 
 export function cliPessoas(emp, obras, movs) {
@@ -405,10 +556,7 @@ export function parseIso(v) {
   return d.length === 3 && d[0] ? new Date(d[0], d[1] - 1, d[2]) : new Date(TODAY);
 }
 
-export const mesesTxt = d => {
-  const m = d / 30.4;
-  return m < 1 ? `${d} dias` : `${m.toFixed(1).replace('.', ',')} meses`;
-};
+export const mesesTxt = d => `${d} dia${d === 1 ? '' : 's'}`;
 
 export function iniciais(n) {
   return n
@@ -419,6 +567,23 @@ export function iniciais(n) {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+}
+
+export const slug = s =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]+/g, '').slice(0, 14);
+
+export function empInfo(emp, obras = []) {
+  let h = 0;
+  for (const c of emp) h = (h * 131 + c.charCodeAt(0)) % 1000003;
+  const ob = obras.filter(o => o.empresa === emp);
+  return {
+    nif: '5' + String(10000000 + (h * 7919) % 89999999).slice(0, 8).replace(/(\d{2})(\d{3})(\d{3})/, '$1 $2 $3'),
+    resp: emp === CLIENTE_DEMO ? 'Eng. Paulo Alves Pinto' : NOMES[h % NOMES.length],
+    tel: `2${30 + h % 60} ${String(100 + h % 900)} ${String(100 + ((h >> 3) % 900))}`,
+    tm: `91${h % 10} ${String(100 + ((h >> 2) % 900))} ${String(100 + ((h >> 5) % 900))}`,
+    email: `geral@${slug(emp)}.pt`,
+    morada: ob[0] ? `${ob[0].cidade} (sede)` : '—',
+  };
 }
 
 export function emailTpl(o, k, movs) {
@@ -435,10 +600,10 @@ export function emailTpl(o, k, movs) {
     .join('\n');
   const foot = `\n\nCom os melhores cumprimentos,\nVidraria Mortágua\n232 000 000 · geral@vidrariamortagua.pt`;
   const bodies = {
-    amigavel: `${head}Segundo os nossos registos, estão nessa obra ${r.total} cavaletes da Vidraria Mortágua:\n${lotsTxt}\n\nO prazo de 6 meses dos mais antigos ${
+    amigavel: `${head}Segundo os nossos registos, estão nessa obra ${r.total} cavaletes da Vidraria Mortágua:\n${lotsTxt}\n\nO prazo de 60 dias dos mais antigos ${
       l.dias < 0 ? 'já terminou' : 'termina a ' + fd(l.prazo)
     }. Quando já não precisarem deles, basta responder a este email e passamos a recolher na próxima volta pela vossa zona.`,
-    terminado: `${head}O prazo de 6 meses dos ${l.qtd} cavaletes entregues a ${fd(l.data)} terminou a ${fd(
+    terminado: `${head}O prazo de 60 dias dos ${l.qtd} cavaletes entregues a ${fd(l.data)} terminou a ${fd(
       l.prazo
     )}.\n\nNo total, estão nessa obra ${r.total} cavaletes:\n${lotsTxt}\n\nPedimos que nos indiquem, até ao final da próxima semana, um dia para a recolha.`,
     recolha: `${head}Vamos ter um camião na zona de ${o.cidade} nos próximos dias e gostaríamos de recolher os ${r.total} cavaletes que estão na obra.\n\nPodem indicar-nos o melhor dia e hora? Basta responder a este email.`,

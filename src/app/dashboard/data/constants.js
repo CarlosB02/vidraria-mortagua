@@ -56,12 +56,23 @@ export const TIPOS_CAV = {
   P: { nome: 'Pequenos', um: 'Pequeno', ini: 5001, fim: 7150 },
 };
 
+export const PRAZO = 60; // dias
+
 export const STAFF = [
-  { nome: 'Helena Costa', papel: 'Administração', tel: '912 000 301', ativo: true },
-  { nome: 'João Santos', papel: 'Escritório', tel: '912 000 302', ativo: true },
-  { nome: 'Ana Ferreira', papel: 'Escritório', tel: '912 000 303', ativo: true },
-  { nome: 'Marco Dias', papel: 'Logística', tel: '912 000 304', ativo: true },
+  { nome: 'Sr. Nuno', papel: 'Administração', tel: '912 000 301', iniciais: 'N', ativo: true },
+  { nome: 'Cristiana', papel: 'Escritório', tel: '912 000 302', iniciais: 'Cr', ativo: true },
+  { nome: 'Catarina', papel: 'Escritório', tel: '912 000 303', iniciais: 'Ca', ativo: true },
 ];
+
+export const USERS = {
+  escritorio: [
+    { nome: 'Cristiana', iniciais: 'Cr', papel: 'Escritório' },
+    { nome: 'Catarina', iniciais: 'Ca', papel: 'Escritório' },
+  ],
+  admin: { nome: 'Sr. Nuno', iniciais: 'N', papel: 'Administração' },
+};
+
+export const LEMB_POR = { o1: 'Cristiana', o2: 'Catarina', o3: 'Cristiana', o4: 'Catarina', o5: 'Cristiana' };
 
 export const MOT_TEL = {};
 MOTORISTAS.forEach((m, i) => {
