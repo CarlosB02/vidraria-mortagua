@@ -1459,14 +1459,15 @@ export default function EscritorioView() {
       if (r.st === 'late') d.late += r.lateQ;
     });
     const distList = Object.entries(dist).sort((a, b) => b[1].n - a[1].n);
+    const maxDist = distList.length > 0 ? distList[0][1].n : 1;
 
     const cnt = k => (k === 'todas' ? rs.length : rs.filter(x => x.r.st === k).length);
     const ch = [
-      ['todas', 'Todas', ''],
-      ['late', 'Terminado', 'var(--late)', ST.late.color],
-      ['soon', '50–60 dias', 'var(--warn)', ST.soon.color],
-      ['watch', '30–50 dias', 'var(--info)', ST.watch.color],
-      ['ok', '< 30 dias', 'var(--ok)', ST.ok.color],
+      ['todas', 'Todas', '', ''],
+      ['late', 'Terminado', 'var(--late)', '#ef3340'],
+      ['soon', '50–60 dias', 'var(--warn)', '#f59e0b'],
+      ['watch', '30–50 dias', 'var(--info)', '#3b82f6'],
+      ['ok', '< 30 dias', 'var(--ok)', '#10b981'],
     ];
 
     return (
@@ -1534,7 +1535,9 @@ export default function EscritorioView() {
                       </small>
                     </span>
                     <span className="num">{v.n}</span>
-                    <span className="chev"><Icon name="right" /></span>
+                    <span className="dbar">
+                      <i style={{ width: `${((v.n / maxDist) * 100).toFixed(0)}%` }} />
+                    </span>
                   </button>
                 ))}
               </div>
