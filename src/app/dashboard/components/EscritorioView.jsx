@@ -324,7 +324,7 @@ export default function EscritorioView() {
 
           <section className="card">
             <div className="card-h">
-              <h2>Onde estão os cavaletes</h2>
+              <h2>Mapa</h2>
               <button
                 type="button"
                 className="linkbtn"
@@ -336,7 +336,23 @@ export default function EscritorioView() {
                 Abrir mapa <Icon name="right" />
               </button>
             </div>
-            <div className="card-b mapprev">
+            <div
+              className="card-b mapprev"
+              role="button"
+              tabIndex={0}
+              aria-label="Abrir mapa completo"
+              onClick={() => {
+                setPageState('mapa');
+                window.scrollTo(0, 0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setPageState('mapa');
+                  window.scrollTo(0, 0);
+                }
+              }}
+            >
               <MapaPortugal preview />
             </div>
           </section>
@@ -1486,9 +1502,7 @@ export default function EscritorioView() {
                   );
                 })}
               </div>
-              <div className="mapbox" style={{ maxHeight: '560px' }}>
-                <MapaPortugal filter={mapf} />
-              </div>
+              <MapaPortugal filter={mapf} noLegend />
             </div>
           </section>
 

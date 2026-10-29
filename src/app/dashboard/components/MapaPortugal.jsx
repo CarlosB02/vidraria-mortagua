@@ -7,7 +7,7 @@ import { resumo, ST, diasTxt } from '../data/logic';
 import { Icon } from '../data/icons';
 import './MapaPortugal.css';
 
-export default function MapaPortugal({ preview = false, filter = 'todas' }) {
+export default function MapaPortugal({ preview = false, filter = 'todas', noLegend = false }) {
   const { obras, movs, setObraId, setPageState, openModal } = useDashboard();
   const [tooltip, setTooltip] = useState(null);
   const [popup, setPopup] = useState(null);
@@ -75,9 +75,17 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
   const renderSvg = () => (
     <svg
       className={`map ${preview ? 'small' : ''}`}
-      viewBox={VIEWBOX || '0 0 12969 26674'}
+      viewBox={VIEWBOX || '-600 -600 14169 27874'}
       role="img"
       aria-label="Mapa de Portugal com as obras que têm cavaletes"
+      style={{
+        display: 'block',
+        margin: '0 auto',
+        width: 'auto',
+        maxWidth: '100%',
+        height: preview ? '290px' : 'min(560px, calc(100vh - 260px))',
+        maxHeight: preview ? '290px' : 'min(560px, calc(100vh - 260px))',
+      }}
     >
       <g className="land">
         {PTD.map((d, i) => (
@@ -99,7 +107,7 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
               r={rr}
               fill={st.color}
               fillOpacity="1"
-              stroke="white"
+              stroke="#ffffff"
               strokeWidth="2.5"
               vectorEffect="non-scaling-stroke"
             />
@@ -114,9 +122,10 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
             cy={y}
             r={rr}
             fill={st.color}
-            fillOpacity="0.85"
-            stroke="var(--surface)"
-            strokeWidth="1.2"
+            fillOpacity="0.9"
+            stroke="#ffffff"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
             tabIndex={0}
             role="button"
             aria-label={`${o.nome}, ${r.total} cavaletes`}
@@ -167,7 +176,7 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
           {renderSvg()}
         </div>
       ) : (
-        <div className="mapwrap" ref={wrapRef}>
+        <div className="mapwrap mapbox" ref={wrapRef}>
           {renderSvg()}
 
           {tooltip && (
@@ -241,15 +250,17 @@ export default function MapaPortugal({ preview = false, filter = 'todas' }) {
         </div>
       )}
 
-      <div className="legend">
-        <span><i style={{ background: '#ef3340' }} />Terminado</span>
-        <span><i style={{ background: '#f59e0b' }} />50–60 dias</span>
-        <span><i style={{ background: '#3b82f6' }} />30–50 dias</span>
-        <span><i style={{ background: '#10b981' }} />&lt; 30 dias</span>
-        {!preview && (
-          <span><i style={{ background: 'var(--ink)', borderRadius: '2px' }} />Fábrica</span>
-        )}
-      </div>
+      {!noLegend && (
+        <div className="legend">
+          <span><i style={{ background: '#ef3340' }} />Terminado</span>
+          <span><i style={{ background: '#f59e0b' }} />50–60 dias</span>
+          <span><i style={{ background: '#3b82f6' }} />30–50 dias</span>
+          <span><i style={{ background: '#10b981' }} />&lt; 30 dias</span>
+          {!preview && (
+            <span><i style={{ background: 'var(--ink)', borderRadius: '2px' }} />Fábrica</span>
+          )}
+        </div>
+      )}
     </>
   );
 }

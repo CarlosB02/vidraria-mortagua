@@ -266,8 +266,34 @@ export default function AdminView() {
           <section className="card">
             <div className="card-h">
               <h2>Mapa</h2>
+              <button
+                type="button"
+                className="linkbtn"
+                onClick={() => {
+                  setPageState('mapa');
+                  window.scrollTo(0, 0);
+                }}
+              >
+                Abrir mapa <Icon name="right" />
+              </button>
             </div>
-            <div className="card-b mapprev">
+            <div
+              className="card-b mapprev"
+              role="button"
+              tabIndex={0}
+              aria-label="Abrir mapa completo"
+              onClick={() => {
+                setPageState('mapa');
+                window.scrollTo(0, 0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setPageState('mapa');
+                  window.scrollTo(0, 0);
+                }
+              }}
+            >
               <MapaPortugal preview />
             </div>
           </section>
@@ -278,6 +304,11 @@ export default function AdminView() {
 
   // ================= PÁGINA OBRAS =================
   if (page === 'obras') {
+    return <EscritorioView />;
+  }
+
+  // ================= PÁGINA MAPA =================
+  if (page === 'mapa') {
     return <EscritorioView />;
   }
 
