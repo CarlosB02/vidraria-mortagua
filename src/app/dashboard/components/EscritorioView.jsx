@@ -1040,10 +1040,10 @@ export default function EscritorioView() {
           </label>
           <div className="ogseg" role="group" aria-label="Organizar por">
             {[
-              ['distrito', 'pin', 'Por distrito', 'Distrito'],
-              ['empresa', 'obra', 'Por empresa', 'Empresa'],
-              ['todas', 'search', 'Todas as obras', 'Todas'],
-            ].map(([k, iconName, labelLg, labelSh]) => (
+              ['distrito', 'pin', 'Por distrito'],
+              ['empresa', 'obra', 'Por empresa'],
+              ['todas', 'search', 'Todas as obras'],
+            ].map(([k, iconName, label]) => (
               <button
                 key={k}
                 type="button"
@@ -1055,15 +1055,14 @@ export default function EscritorioView() {
                 }}
               >
                 <Icon name={iconName} />
-                <span className="lg">{labelLg}</span>
-                <span className="sh">{labelSh}</span>
+                <span>{label}</span>
               </button>
             ))}
           </div>
         </div>
 
         {isFolderView ? (
-          <div className="folders">
+          <div className="folders" key={`${page}-${og}`}>
             {folderList.map(([k, g], i) => {
               const totFolder = Math.max(1, g.cav);
               return (
@@ -1259,19 +1258,30 @@ export default function EscritorioView() {
     const inv = inventario(obras, movs);
     const tipos = Object.entries(TIPOS_CAV);
 
-    const countTipo = k => (k === 'todos' ? inv.length : inv.filter(x => x.tipo === k).length);
-    const countEst = k => (k === 'todos' ? inv.length : inv.filter(x => cavEstado(x) === k).length);
+    const cFab = inv.filter(x => x.estado === 'fabrica').length;
+    const cObra = inv.filter(x => x.estado === 'obra').length;
+    const cLate = inv.filter(x => x.estado === 'obra' && x.dias != null && x.dias < 0).length;
+    const cCam = inv.filter(x => x.estado === 'caminho').length;
 
     const normCavQ = norm(cav.q.trim());
     const filteredCav = inv
       .filter(x => cav.tipo === 'todos' || x.tipo === cav.tipo)
-      .filter(x => cav.est === 'todos' || cavEstado(x) === cav.est)
-      .filter(x => !normCavQ || String(x.num).includes(normCavQ) || (x.obra && norm(x.obra.nome + ' ' + x.obra.empresa).includes(normCavQ)));
-
-    const cFab = inv.filter(x => x.estado === 'fabrica').length;
-    const cObra = inv.filter(x => x.estado === 'obra' && x.dias >= 0).length;
-    const cLate = inv.filter(x => x.estado === 'obra' && x.dias < 0).length;
-    const cCam = inv.filter(x => x.estado === 'caminho').length;
+      .filter(x => {
+        if (cav.est === 'todos') return true;
+        if (cav.est === 'fabrica') return x.estado === 'fabrica';
+        if (cav.est === 'obra') return x.estado === 'obra';
+        if (cav.est === 'caminho') return x.estado === 'caminho';
+        if (cav.est === 'late') return x.estado === 'obra' && x.dias != null && x.dias < 0;
+        return true;
+      })
+      .filter(x => {
+        if (!normCavQ) return true;
+        if (String(x.n).includes(normCavQ)) return true;
+        if (TIPOS_CAV[x.tipo]?.nome && norm(TIPOS_CAV[x.tipo].nome).includes(normCavQ)) return true;
+        const ob = x.obraId ? obras.find(o => o.id === x.obraId) : null;
+        if (ob && norm(ob.nome + ' ' + ob.empresa + ' ' + ob.cidade).includes(normCavQ)) return true;
+        return false;
+      });
 
     return (
       <>
@@ -1282,141 +1292,171 @@ export default function EscritorioView() {
               <span>Cavaletes</span>
             </h1>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => openModal({ type: 'nova', nums: [] })}
-          >
-            <Icon name="plus" />Nova entrega
-          </button>
-        </div>
-
-        <div className="kpis">
-          <div className="kpi">
-            <span className="top"><Icon name="factory" />Na fábrica</span>
-            <span className="kvr"><span className="v num">{fmtN(cFab)}</span></span>
-          </div>
-          <div className="kpi">
-            <span className="top"><Icon name="obra" />Em obra</span>
-            <span className="kvr"><span className="v num">{fmtN(cObra)}</span></span>
-          </div>
-          <div className="kpi">
-            <span className="top"><Icon name="truck" />A caminho</span>
-            <span className="kvr"><span className="v num">{fmtN(cCam)}</span></span>
-          </div>
-          <div className={`kpi${cLate > 0 ? ' late' : ''}`}>
-            <span className="top"><Icon name="alert" />Fora do prazo</span>
-            <span className="kvr"><span className="v num">{fmtN(cLate)}</span></span>
+          <div className="actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => openModal({ type: 'nova', nums: [] })}
+            >
+              <Icon name="plus" />
+              Nova entrega
+            </button>
           </div>
         </div>
 
-        <div className="toolbar" style={{ marginTop: '16px' }}>
-          <label className="search" htmlFor="cav-q">
-            <Icon name="search" />
-            <input
-              id="cav-q"
-              type="search"
-              placeholder="Procurar por número ou obra"
-              value={cav.q}
-              onChange={e => setCav(s => ({ ...s, q: e.target.value, lim: 20 }))}
-              aria-label="Procurar cavalete"
-            />
-          </label>
-          <div className="chips-seg" role="group" aria-label="Filtrar por tipo">
-            {[['todos', 'Todos', countTipo('todos')], ...tipos.map(([k, v]) => [k, v.nome, countTipo(k)])].map(
-              ([k, l, count]) => (
+        {/* 3 Cards de Tipos de Cavalete */}
+        <div className="tcards" key={page}>
+          {tipos.map(([k, T]) => {
+            const listT = inv.filter(x => x.tipo === k);
+            const totalT = T.fim - T.ini + 1;
+            const fabT = listT.filter(x => x.estado === 'fabrica').length;
+            const obraT = listT.filter(x => x.estado === 'obra').length;
+            const camT = listT.filter(x => x.estado === 'caminho').length;
+            const lateT = listT.filter(x => x.estado === 'obra' && x.dias != null && x.dias < 0).length;
+
+            return (
+              <div
+                key={k}
+                className="tcard"
+                role="button"
+                tabIndex={0}
+                aria-pressed={cav.tipo === k}
+                onClick={() => setCav(s => ({ ...s, tipo: s.tipo === k ? 'todos' : k, lim: 20 }))}
+              >
+                <div className="th">
+                  <span className={`tic t${k}`}>
+                    <Icon name="cav" />
+                  </span>
+                  <div>
+                    <b>{T.nome}</b>
+                    <small>N.º {T.ini} – {T.fim}</small>
+                  </div>
+                  <span className="tt num">{totalT}</span>
+                </div>
+
+                <div className="tbar" role="img" aria-label={`Distribuição de ${T.nome}`}>
+                  <i style={{ flex: fabT, background: 'var(--ok-bar, #9fceb5)' }} />
+                  <i style={{ flex: obraT, background: 'var(--info-bar, #a7c0d9)' }} />
+                  <i style={{ flex: camT, background: 'var(--warn-bar, #ecc285)' }} />
+                </div>
+
+                <div className="tleg">
+                  <span>
+                    <i style={{ background: 'var(--ok-bar, #9fceb5)', borderRadius: '50%' }} />
+                    Fábrica <b>{fabT}</b>
+                  </span>
+                  <span>
+                    <i style={{ background: 'var(--info-bar, #a7c0d9)', borderRadius: '50%' }} />
+                    Obras <b>{obraT}</b>
+                  </span>
+                  <span>
+                    <i style={{ background: 'var(--warn-bar, #ecc285)', borderRadius: '50%' }} />
+                    A caminho <b>{camT}</b>
+                  </span>
+                </div>
+
+                <div className={`tlate${lateT === 0 ? ' ok' : ''}`}>
+                  <Icon name={lateT > 0 ? 'alert' : 'check'} />
+                  <span>{lateT > 0 ? `${lateT} fora do prazo` : 'Nenhum fora do prazo'}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Card Principal: Todos os Cavaletes */}
+        <section className="card" style={{ marginTop: '18px' }}>
+          <div className="card-b" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: '0 0 16px 0' }}>Todos os cavaletes</h2>
+
+            {/* Barra de Pesquisa */}
+            <div className="search" style={{ width: '100%', marginBottom: '16px' }}>
+              <Icon name="search" />
+              <input
+                id="cav-q"
+                type="search"
+                placeholder="Procurar por número ou obra"
+                value={cav.q}
+                onChange={e => setCav(s => ({ ...s, q: e.target.value, lim: 20 }))}
+                aria-label="Procurar cavalete"
+              />
+            </div>
+
+            {/* Chips de Filtragem por Estado */}
+            <div className="chips" style={{ marginBottom: '18px' }} role="group" aria-label="Filtrar por estado">
+              {[
+                ['todos', 'Todos', inv.length],
+                ['fabrica', 'Na fábrica', cFab],
+                ['obra', 'Em obra', cObra],
+                ['caminho', 'A caminho', cCam],
+                ['late', 'Fora do prazo', cLate],
+              ].map(([k, l, count]) => (
                 <button
                   key={k}
                   type="button"
                   className="chip"
-                  aria-pressed={cav.tipo === k}
-                  onClick={() => setCav(s => ({ ...s, tipo: k, lim: 20 }))}
+                  aria-pressed={cav.est === k}
+                  onClick={() => setCav(s => ({ ...s, est: k, lim: 20 }))}
                 >
                   {l} <span className="n">{count}</span>
                 </button>
-              )
-            )}
-          </div>
-        </div>
+              ))}
+            </div>
 
-        <div className="chips-seg" style={{ marginBottom: '16px' }} role="group" aria-label="Filtrar por estado">
-          {[
-            ['todos', 'Todos', countEst('todos')],
-            ['fabrica', 'Na fábrica', countEst('fabrica')],
-            ['obra', 'Em obra', countEst('obra')],
-            ['caminho', 'A caminho', countEst('caminho')],
-            ['late', 'Fora do prazo', countEst('late')],
-          ].map(([k, l, count]) => (
-            <button
-              key={k}
-              type="button"
-              className="chip"
-              aria-pressed={cav.est === k}
-              onClick={() => setCav(s => ({ ...s, est: k, lim: 20 }))}
-            >
-              {l} <span className="n">{count}</span>
-            </button>
-          ))}
-        </div>
-
-        <section className="card">
-          <div className="card-b">
+            {/* Tabela de Cavaletes */}
             <div className="tablewrap">
-              <table className="otab">
+              <table className="cavt">
                 <thead>
                   <tr>
-                    <th>Número</th>
+                    <th>N.º</th>
                     <th>Tipo</th>
                     <th>Estado</th>
-                    <th>Localização / Obra</th>
+                    <th>Onde está</th>
                     <th>Desde</th>
-                    <th style={{ textAlign: 'right' }}>Prazo</th>
+                    <th>Prazo</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredCav.slice(0, cav.lim).map(c => {
-                    const est = cavEstado(c);
-                    const isLate = est === 'late';
+                    const ob = c.obraId ? obras.find(o => o.id === c.obraId) : null;
+                    const isLate = c.estado === 'obra' && c.dias !== null && c.dias < 0;
+
                     return (
-                      <tr key={c.num}>
-                        <td data-l="Número"><span className="atl-code">{c.num}</span></td>
-                        <td data-l="Tipo">{TIPOS_CAV[c.tipo]?.nome || c.tipo}</td>
-                        <td data-l="Estado">
-                          <span
-                            className={`pill tone-${
-                              est === 'fabrica' ? 'ok' : est === 'caminho' ? 'info' : isLate ? 'late' : 'warn'
-                            }`}
-                          >
-                            {est === 'fabrica'
-                              ? 'Na fábrica'
-                              : est === 'caminho'
-                              ? 'A caminho'
-                              : isLate
-                              ? 'Fora do prazo'
-                              : 'Em obra'}
-                          </span>
+                      <tr key={c.n}>
+                        <td className="num" style={{ fontWeight: 600 }}>{c.n}</td>
+                        <td>{TIPOS_CAV[c.tipo]?.nome || c.tipo}</td>
+                        <td>
+                          {c.estado === 'fabrica' ? (
+                            <span className="pill tone-ok">
+                              <Icon name="factory" /> Na fábrica
+                            </span>
+                          ) : c.estado === 'caminho' ? (
+                            <span className="pill tone-warn">
+                              <Icon name="truck" /> A caminho
+                            </span>
+                          ) : isLate ? (
+                            <span className="pill tone-late">
+                              <Icon name="alert" /> Fora do prazo
+                            </span>
+                          ) : (
+                            <span className="pill tone-info">
+                              <Icon name="obra" /> Em obra
+                            </span>
+                          )}
                         </td>
-                        <td data-l="Localização / Obra">
-                          {c.obra ? (
-                            <button
-                              type="button"
-                              className="linkbtn"
-                              style={{ textAlign: 'left' }}
-                              onClick={() => openObra(c.obra.id)}
-                            >
-                              <b>{c.obra.nome}</b>
-                              <span className="muted" style={{ display: 'block', fontSize: '0.85em' }}>
-                                {c.obra.empresa} · {c.obra.cidade}
-                              </span>
-                            </button>
+                        <td>
+                          {ob ? (
+                            <span>
+                              <b>{ob.nome}</b> <span className="muted">· {ob.cidade}</span>
+                            </span>
                           ) : (
                             <span className="muted">Fábrica de Mortágua</span>
                           )}
                         </td>
-                        <td data-l="Desde">{c.data ? fd(c.data) : '—'}</td>
-                        <td data-l="Prazo" style={{ textAlign: 'right' }}>
-                          {c.dias != null ? (
-                            <span style={{ color: isLate ? 'var(--late)' : 'inherit', fontWeight: isLate ? 600 : 400 }}>
+                        <td>{c.desde ? fd(c.desde) : '—'}</td>
+                        <td>
+                          {c.dias !== null ? (
+                            <span style={{ color: isLate ? 'var(--late)' : 'var(--ok)', fontWeight: 500 }}>
                               {diasTxt(c.dias)}
                             </span>
                           ) : (
@@ -1431,14 +1471,14 @@ export default function EscritorioView() {
             </div>
 
             {filteredCav.length > cav.lim && (
-              <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+              <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
                 <button
                   type="button"
                   className="btn btn-ghost"
                   onClick={() => setCav(s => ({ ...s, lim: s.lim + 20 }))}
                 >
                   <Icon name="plus" />
-                  Ver mais ({filteredCav.length - cav.lim} restantes)
+                  Ver mais 20 cavaletes ({filteredCav.length - cav.lim} restantes)
                 </button>
               </div>
             )}

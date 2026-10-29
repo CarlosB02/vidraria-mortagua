@@ -48,6 +48,8 @@ export function DashboardProvider({ children }) {
     setEmp(null);
     setPageState('obras');
     window.scrollTo(0, 0);
+    const mainEl = document.getElementById('main');
+    if (mainEl) mainEl.scrollTop = 0;
   }, [page, obraId, emp, empFrom]);
 
   const openEmpresa = useCallback((empName) => {
@@ -57,6 +59,8 @@ export function DashboardProvider({ children }) {
     setObraId(null);
     setPageState('obras');
     window.scrollTo(0, 0);
+    const mainEl = document.getElementById('main');
+    if (mainEl) mainEl.scrollTop = 0;
   }, [page, obraId, emp, empFrom]);
 
   const goBack = useCallback(() => {
@@ -282,7 +286,9 @@ export function DashboardProvider({ children }) {
       ...prev,
       movs: [newMov, ...prev.movs],
       pedidos: prev.pedidos.map(p =>
-        p.id === pedidoId ? { ...p, estado: 'logistica', movId: newMov.id, guia } : p
+        p.id === pedidoId
+          ? { ...p, estado: 'logistica', movId: newMov.id, guia, logDe: TODAY, logPor: currentUser }
+          : p
       ),
     }));
 

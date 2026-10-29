@@ -61,6 +61,8 @@ export default function Sidebar() {
       setOgSel(null);
     }
     window.scrollTo(0, 0);
+    const mainEl = document.getElementById('main');
+    if (mainEl) mainEl.scrollTop = 0;
   };
 
   const handleDefinicoesClick = () => {
@@ -69,6 +71,8 @@ export default function Sidebar() {
     if (setEmp) setEmp(null);
     if (setEmpFrom) setEmpFrom(null);
     window.scrollTo(0, 0);
+    const mainEl = document.getElementById('main');
+    if (mainEl) mainEl.scrollTop = 0;
   };
 
   return (

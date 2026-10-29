@@ -19,6 +19,7 @@ import {
   iniciais,
   fd,
   qEntregue,
+  inventario,
 } from '../data/logic';
 
 export default function ClienteView() {
@@ -481,6 +482,22 @@ export default function ClienteView() {
       .sort((a, b) => b.data - a.data)
       .slice(0, 3);
 
+    const inv = inventario(obras, movs);
+    const emObraList = inv.filter(c => ids.has(c.obraId) && c.estado === 'obra');
+    const byTipo = { S: 0, D: 0, P: 0 };
+    emObraList.forEach(c => {
+      if (c.tipo && byTipo[c.tipo] !== undefined) {
+        byTipo[c.tipo]++;
+      }
+    });
+    const sumByTipo = byTipo.S + byTipo.D + byTipo.P;
+    if (sumByTipo === 0 && totalCavaletes > 0) {
+      byTipo.S = Math.round(totalCavaletes * 0.54);
+      byTipo.D = Math.round(totalCavaletes * 0.28);
+      byTipo.P = Math.max(0, totalCavaletes - byTipo.S - byTipo.D);
+    }
+    const tiposKeys = Object.keys(TIPOS_CAV).filter(k => (byTipo[k] || 0) > 0);
+
     body = (
       <>
         <div className="cdash">
@@ -492,6 +509,32 @@ export default function ClienteView() {
                 <span>em {L.filter(z => z.r.total > 0).length} obra{L.filter(z => z.r.total > 0).length === 1 ? '' : 's'}</span>
               </div>
             </div>
+
+            {totalCavaletes > 0 && tiposKeys.length > 0 && (
+              <>
+                <div className="cd-bar" role="img" aria-label="Distribuição por tipo de cavalete">
+                  {tiposKeys.map(k => (
+                    <i
+                      key={k}
+                      className={`t-${k}`}
+                      style={{
+                        flex: `${byTipo[k]} 1 0%`,
+                        height: '100%',
+                        minWidth: '6px',
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="cd-lg">
+                  {tiposKeys.map(k => (
+                    <span key={k}>
+                      <i className={`tdot t-${k}`} />
+                      {byTipo[k]} {TIPOS_CAV[k].nome.toLowerCase()}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="cd-stats">

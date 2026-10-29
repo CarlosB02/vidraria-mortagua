@@ -72,7 +72,7 @@ export const USERS = {
   admin: { nome: 'Sr. Nuno', iniciais: 'N', papel: 'Administração' },
 };
 
-export const LEMB_POR = { o1: 'Cristiana', o2: 'Catarina', o3: 'Cristiana', o4: 'Catarina', o5: 'Cristiana' };
+export const LEMB_POR = { o3: 'Cristiana', o6: 'Catarina', o7: 'Cristiana' };
 
 export const MOT_TEL = {};
 MOTORISTAS.forEach((m, i) => {

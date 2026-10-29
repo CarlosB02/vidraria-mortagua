@@ -140,7 +140,7 @@ export default function AdminView() {
     let off = 0;
 
     return (
-      <>
+      <div key={`adm-${page}`} className="admin-page-anim">
         <div className="pagehead home">
           <div>
             <p className="date">{DIAS[TODAY.getDay()]}, {fdl(TODAY)}</p>
@@ -298,7 +298,7 @@ export default function AdminView() {
             </div>
           </section>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -322,7 +322,7 @@ export default function AdminView() {
     );
 
     return (
-      <>
+      <div key={`adm-${page}`} className="admin-page-anim">
         <div className="pagehead">
           <div>
             <h1 className="ph">
@@ -440,7 +440,7 @@ export default function AdminView() {
             </div>
           </div>
         </section>
-      </>
+      </div>
     );
   }
 
@@ -470,7 +470,7 @@ export default function AdminView() {
     const mxVal = topE[0] ? topE[0].v : 1;
 
     return (
-      <>
+      <div key={`adm-${page}`} className="admin-page-anim">
         <div className="pagehead">
           <div>
             <h1 className="ph">
@@ -586,7 +586,7 @@ export default function AdminView() {
             )}
           </div>
         </section>
-      </>
+      </div>
     );
   }
 
@@ -691,7 +691,7 @@ export default function AdminView() {
     const shown = L.slice(0, alim);
 
     return (
-      <>
+      <div key={`adm-${page}`} className="admin-page-anim">
         <div className="pagehead">
           <div>
             <h1 className="ph">
@@ -709,6 +709,7 @@ export default function AdminView() {
               ['esc', 'Escritório', 'monitor'],
               ['mot', 'Motoristas', 'truck'],
               ['cli', 'Clientes', 'user'],
+              ['sis', 'Sistema', 'mail'],
             ].map(([k, l, i]) => (
               <button
                 key={k}
@@ -831,7 +832,7 @@ export default function AdminView() {
             )}
           </div>
         </section>
-      </>
+      </div>
     );
   }
 

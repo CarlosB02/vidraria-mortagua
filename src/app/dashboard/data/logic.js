@@ -422,6 +422,21 @@ export function atividade(
           q: l.qtd,
         });
       }
+      const d7 = addDays(l.prazo, -7);
+      if (auto.d7 && d7 <= TODAY) {
+        ev0({
+          d: d7,
+          mi: hr(o.id + l.mov.id + 'd7', 7, 2),
+          quem: 'Email automático',
+          papel: 'Sistema',
+          g: 'sis',
+          titulo: 'Pedido de data de recolha',
+          desc: `Faltam 7 dias para o prazo de ${l.qtd} cavaletes. Pedido de data enviado para ${esc(o.email)}.`,
+          guia: l.mov.guia,
+          obra: ob,
+          q: l.qtd,
+        });
+      }
       if (auto.d0 && l.prazo <= TODAY) {
         ev0({
           d: l.prazo,
