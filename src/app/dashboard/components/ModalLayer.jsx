@@ -15,6 +15,7 @@ import {
 } from '../data/constants';
 import {
   inventario,
+  resumo,
   tipoDe,
   cavEstado,
   resLists,
@@ -77,7 +78,8 @@ export default function ModalLayer() {
         calOpen: false,
         calM: null,
         mot: null,
-        mq: '',
+        motQ: '',
+        motOpen: false,
         err: '',
         _inv: inv,
       });
@@ -105,7 +107,8 @@ export default function ModalLayer() {
         calOpen: false,
         calM: null,
         mot: m ? m.motorista : null,
-        mq: '',
+        motQ: m && m.motorista ? `Sr. ${m.motorista}` : '',
+        motOpen: false,
         err: '',
       });
     }
@@ -180,7 +183,8 @@ export default function ModalLayer() {
                           </div>
                           <button
                             type="button"
-                            className="linkbtn"
+                            className="btn btn-ghost btn-sm"
+                            style={{ borderRadius: '8px', fontWeight: 600 }}
                             onClick={() => setNovaState(s => ({ ...s, obraId: null, nova: null }))}
                           >
                             Alterar
@@ -194,10 +198,18 @@ export default function ModalLayer() {
                         <span className="pill tone-ok"><Icon name="plus" />Obra nova</span>
                         <button
                           type="button"
-                          className="linkbtn"
+                          className="btn btn-ghost btn-sm"
+                          style={{
+                            borderRadius: '10px',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
                           onClick={() => setNovaState(s => ({ ...s, nova: null }))}
                         >
-                          Escolher obra existente
+                          <Icon name="search" style={{ width: '14px', height: '14px' }} />
+                          <span>Escolher obra existente</span>
                         </button>
                       </div>
                       <div className="g2">
@@ -279,6 +291,7 @@ export default function ModalLayer() {
                           placeholder="Escreva o nome da obra, cliente ou localidade"
                           value={novaState.q}
                           onChange={e => setNovaState(s => ({ ...s, q: e.target.value }))}
+                          style={{ border: 0, outline: 'none', background: 'transparent', minHeight: 0, padding: '12px 0', boxShadow: 'none' }}
                         />
                       </div>
                       <div className="cbox-list">
@@ -344,6 +357,7 @@ export default function ModalLayer() {
                       className={`calbtn ${novaState.calOpen ? 'open' : ''}`}
                       onClick={() => setNovaState(s => ({ ...s, calOpen: !s.calOpen, calM: null }))}
                       aria-expanded={novaState.calOpen}
+                      style={{ height: '51px', minHeight: '51px', boxSizing: 'border-box' }}
                     >
                       <span className="calic"><Icon name="cal" /></span>
                       <span className="calv">
@@ -448,58 +462,44 @@ export default function ModalLayer() {
 
                   {/* Motorista */}
                   <div className="field">
-                    <label htmlFor="n-mq">Motorista</label>
-                    {novaState.mot ? (
-                      <button
-                        type="button"
-                        className="calbtn"
-                        onClick={() => setNovaState(s => ({ ...s, mot: null, mq: '' }))}
-                        aria-label="Alterar motorista"
-                      >
-                        <span className="calic"><Icon name="truck" /></span>
-                        <span className="calv">
-                          <b>Sr. {novaState.mot}</b>
-                          <span>{MOT_TEL[novaState.mot] || 'Motorista'}</span>
-                        </span>
-                        <svg className="calch" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
-                      </button>
-                    ) : (
-                      <>
-                        <div className="cbox">
-                          <Icon name="search" />
-                          <input
-                            id="n-mq"
-                            autoComplete="off"
-                            placeholder="Escreva o nome do motorista"
-                            value={novaState.mq}
-                            onChange={e => setNovaState(s => ({ ...s, mq: e.target.value }))}
-                          />
-                        </div>
-                        <div className="cbox-list">
-                          {(() => {
-                            const nq = norm(novaState.mq.trim());
-                            const list = (nq
-                              ? motoristasList.filter(m => norm(m).includes(nq))
-                              : motoristasList
-                            ).slice(0, 3);
-                            if (!list.length) {
-                              return <div className="cbox-empty">Nenhum motorista com esse nome.</div>;
+                    <label>Motorista</label>
+                    <button
+                      type="button"
+                      className={`calbtn ${novaState.motOpen ? 'open' : ''}`}
+                      onClick={() => setNovaState(s => ({ ...s, motOpen: !s.motOpen, calOpen: false }))}
+                      aria-expanded={novaState.motOpen}
+                      style={{ height: '51px', minHeight: '51px', boxSizing: 'border-box' }}
+                    >
+                      <span className="calic"><Icon name="truck" /></span>
+                      <span className="calv">
+                        <b>{novaState.mot ? `Sr. ${novaState.mot}` : 'Escolher motorista'}</b>
+                        <span>{novaState.mot ? (MOT_TEL[novaState.mot] || 'Motorista atribuído') : 'Clique para selecionar'}</span>
+                      </span>
+                      <svg className="calch" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    {novaState.motOpen && (
+                      <div className="cbox-list">
+                        {motoristasList.slice(0, 3).map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="cbox-i"
+                            onClick={() =>
+                              setNovaState(s => ({
+                                ...s,
+                                mot: m,
+                                motOpen: false,
+                                err: '',
+                              }))
                             }
-                            return list.map(m => (
-                              <button
-                                key={m}
-                                type="button"
-                                className="cbox-i"
-                                onClick={() => setNovaState(s => ({ ...s, mot: m, mq: '', err: '' }))}
-                              >
-                                <b>Sr. {m}</b>
-                              </button>
-                            ));
-                          })()}
-                        </div>
-                      </>
+                          >
+                            <b>Sr. {m}</b>
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -559,6 +559,55 @@ export default function ModalLayer() {
                       ) : (
                         <p className="pk-empty">Pesquise abaixo pelo número de cada cavalete que vai sair.</p>
                       )}
+
+                      {/* Avisos de cavaletes fora da fábrica */}
+                      {(() => {
+                        const offCavs = novaState.nums
+                          .map(n => novaState._inv.find(c => c.n === n))
+                          .filter(c => c && c.estado !== 'fabrica');
+
+                        if (!offCavs.length) return null;
+
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                            {offCavs.map(c => {
+                              const [, , label] = cavEstado(c);
+                              const o = c.obraId ? obras.find(x => x.id === c.obraId) : null;
+                              return (
+                                <div
+                                  key={c.n}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '10px',
+                                    padding: '9px 12px',
+                                    borderRadius: '10px',
+                                    background: 'color-mix(in srgb, var(--warn) 14%, var(--surface))',
+                                    border: '1.5px solid color-mix(in srgb, var(--warn) 35%, transparent)',
+                                    color: 'var(--ink)',
+                                    fontSize: '0.88rem',
+                                    lineHeight: '1.35',
+                                  }}
+                                >
+                                  <Icon
+                                    name="alert"
+                                    style={{
+                                      width: '17px',
+                                      height: '17px',
+                                      color: 'var(--warn)',
+                                      flexShrink: 0,
+                                      marginTop: '2px',
+                                    }}
+                                  />
+                                  <span>
+                                    O cavalete <b>{c.n}</b> está registado como <b>{label}{o ? ` · ${o.nome}` : ''}</b>. Confirme antes de enviar.
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="cbox">
@@ -569,6 +618,27 @@ export default function ModalLayer() {
                         inputMode="numeric"
                         placeholder="Escreva o número, ex.: 1001"
                         value={novaState.cq}
+                        style={{ border: 0, outline: 'none', background: 'transparent', minHeight: 0, padding: '12px 0', boxShadow: 'none' }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const num = parseInt(novaState.cq, 10);
+                            const target = novaState._inv.find(c => c.n === num);
+                            if (target && !novaState.nums.includes(target.n)) {
+                              setNovaState(s => ({
+                                ...s,
+                                nums: [...s.nums, target.n],
+                                cq: '',
+                                err: '',
+                              }));
+                              if (target.estado !== 'fabrica') {
+                                const [, , l] = cavEstado(target);
+                                const o = target.obraId ? obras.find(x => x.id === target.obraId) : null;
+                                showToast(`Aviso: cavalete ${target.n} está registado como ${l}${o ? ' · ' + o.nome : ''}`);
+                              }
+                            }
+                          }
+                        }}
                         onChange={e => setNovaState(s => ({ ...s, cq: e.target.value.replace(/\D/g, '') }))}
                       />
                     </div>
@@ -608,14 +678,18 @@ export default function ModalLayer() {
                                   <button
                                     type="button"
                                     className="btn btn-soft btn-sm"
-                                    onClick={() =>
+                                    onClick={() => {
                                       setNovaState(s => ({
                                         ...s,
                                         nums: [...s.nums, c.n],
                                         cq: '',
                                         err: '',
-                                      }))
-                                    }
+                                      }));
+                                      if (c.estado !== 'fabrica') {
+                                        const o = c.obraId ? obras.find(x => x.id === c.obraId) : null;
+                                        showToast(`Aviso: cavalete ${c.n} está registado como ${l}${o ? ' · ' + o.nome : ''}`);
+                                      }
+                                    }}
                                   >
                                     <Icon name="plus" />Adicionar
                                   </button>
@@ -1333,6 +1407,7 @@ export default function ModalLayer() {
                             type="button"
                             className={`calbtn ${atribState.calOpen ? 'open' : ''}`}
                             onClick={() => setAtribState(s => ({ ...s, calOpen: !s.calOpen, calM: null }))}
+                            style={{ height: '51px', minHeight: '51px', boxSizing: 'border-box' }}
                           >
                             <span className="calic"><Icon name="cal" /></span>
                             <span className="calv">
@@ -1436,54 +1511,44 @@ export default function ModalLayer() {
                         </div>
 
                         <div className="field">
-                          <label htmlFor="n-mq">Motorista</label>
-                          {atribState.mot ? (
-                            <button
-                              type="button"
-                              className="calbtn"
-                              onClick={() => setAtribState(s => ({ ...s, mot: null, mq: '' }))}
-                            >
-                              <span className="calic"><Icon name="truck" /></span>
-                              <span className="calv">
-                                <b>Sr. {atribState.mot}</b>
-                                <span>{MOT_TEL[atribState.mot] || 'Motorista'}</span>
-                              </span>
-                              <svg className="calch" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <path d="m6 9 6 6 6-6" />
-                              </svg>
-                            </button>
-                          ) : (
-                            <>
-                              <div className="cbox">
-                                <Icon name="search" />
-                                <input
-                                  id="n-mq"
-                                  autoComplete="off"
-                                  placeholder="Escreva o nome do motorista"
-                                  value={atribState.mq}
-                                  onChange={e => setAtribState(s => ({ ...s, mq: e.target.value }))}
-                                />
-                              </div>
-                              <div className="cbox-list">
-                                {(() => {
-                                  const nq = norm(atribState.mq.trim());
-                                  const list = (nq
-                                    ? motoristasList.filter(m => norm(m).includes(nq))
-                                    : motoristasList
-                                  ).slice(0, 3);
-                                  return list.map(m => (
-                                    <button
-                                      key={m}
-                                      type="button"
-                                      className="cbox-i"
-                                      onClick={() => setAtribState(s => ({ ...s, mot: m, mq: '', err: '' }))}
-                                    >
-                                      <b>Sr. {m}</b>
-                                    </button>
-                                  ));
-                                })()}
-                              </div>
-                            </>
+                          <label>Motorista</label>
+                          <button
+                            type="button"
+                            className={`calbtn ${atribState.motOpen ? 'open' : ''}`}
+                            onClick={() => setAtribState(s => ({ ...s, motOpen: !s.motOpen, calOpen: false }))}
+                            aria-expanded={atribState.motOpen}
+                            style={{ height: '51px', minHeight: '51px', boxSizing: 'border-box' }}
+                          >
+                            <span className="calic"><Icon name="truck" /></span>
+                            <span className="calv">
+                              <b>{atribState.mot ? `Sr. ${atribState.mot}` : 'Escolher motorista'}</b>
+                              <span>{atribState.mot ? (MOT_TEL[atribState.mot] || 'Motorista atribuído') : 'Clique para selecionar'}</span>
+                            </span>
+                            <svg className="calch" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="m6 9 6 6 6-6" />
+                            </svg>
+                          </button>
+
+                          {atribState.motOpen && (
+                            <div className="cbox-list">
+                              {motoristasList.slice(0, 3).map(m => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  className="cbox-i"
+                                  onClick={() =>
+                                    setAtribState(s => ({
+                                      ...s,
+                                      mot: m,
+                                      motOpen: false,
+                                      err: '',
+                                    }))
+                                  }
+                                >
+                                  <b>Sr. {m}</b>
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>

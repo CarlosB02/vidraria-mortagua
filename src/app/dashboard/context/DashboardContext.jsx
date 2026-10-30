@@ -11,6 +11,7 @@ import {
   CLIENTE_DEMO,
   PRAZO,
   isoD,
+  fd,
   addDays,
   addMonths,
 } from '../data/constants.js';
@@ -57,7 +58,9 @@ export function DashboardProvider({ children }) {
     setEmp(empName);
     setEmpFrom(obraId);
     setObraId(null);
-    setPageState('obras');
+    if (page !== 'clientes') {
+      setPageState('obras');
+    }
     window.scrollTo(0, 0);
     const mainEl = document.getElementById('main');
     if (mainEl) mainEl.scrollTop = 0;

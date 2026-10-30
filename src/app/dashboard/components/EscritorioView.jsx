@@ -83,8 +83,14 @@ export default function EscritorioView() {
   const [eh, setEh] = useState({ obra: '', per: '', mot: '', est: '', ord: 'rec' });
   const [ehlim, setEhlim] = useState(15);
 
+  // Filtros locais da página de Clientes
+  const [cliQ, setCliQ] = useState('');
+  const [cliF, setCliF] = useState('todos');
+  const [cliSort, setCliSort] = useState('cav');
+
   // Estado do accordion de alertas
   const [aOpen, setAOpen] = useState(null);
+  const [qrBusca, setQrBusca] = useState('3127');
 
   // Helper de badge/pill de movimento
   const movPill = m => {
@@ -310,7 +316,7 @@ export default function EscritorioView() {
                   >
                     <div className="t">
                       <b>
-                        <span className={`aic tone-${a.tone}`}><Icon name={a.icon} /></span>
+                        <span className={`aic aic-${a.tone}`}><Icon name={a.icon} /></span>
                         {a.t}
                       </b>
                       <span>{a.s}</span>
@@ -361,10 +367,8 @@ export default function EscritorioView() {
     );
   }
 
-  // ================= PÁGINA OBRAS =================
-  if (page === 'obras') {
-    // ---------------- FICHA DA EMPRESA ----------------
-    if (emp && !obraId) {
+  // ================= FICHA DA EMPRESA (CLIENTE) =================
+  if ((page === 'obras' || page === 'clientes') && emp && !obraId) {
       const I = empInfo(emp, obras);
       const L = obras.filter(o => o.empresa === emp).map(o => ({ o, r: resumo(o, movs) }));
       const ativas = L.filter(x => x.r.total > 0 || x.r.transito > 0);
@@ -701,6 +705,356 @@ export default function EscritorioView() {
       );
     }
 
+  // ================= PÁGINA CLIENTES =================
+  if (page === 'clientes') {
+    // Agrupa dados de todas as empresas clientes
+    const allEmpsMap = new Map();
+    obras.forEach(o => {
+      if (!o.empresa) return;
+      const r = resumo(o, movs);
+      if (!allEmpsMap.has(o.empresa)) {
+        const inf = empInfo(o.empresa, obras);
+        allEmpsMap.set(o.empresa, {
+          name: o.empresa,
+          info: inf,
+          obras: [],
+          totalCav: 0,
+          transito: 0,
+          lateQ: 0,
+          seg: { ok: 0, watch: 0, soon: 0, late: 0 },
+          earliestLot: null,
+          earliestDias: null,
+        });
+      }
+      const item = allEmpsMap.get(o.empresa);
+      item.obras.push({ o, r });
+      item.totalCav += r.total;
+      item.transito += r.transito;
+      item.lateQ += r.lateQ;
+
+      r.lots.forEach(l => {
+        const st = stFor(l.data, l.dias);
+        item.seg[st] += l.qtd;
+        if (item.earliestDias === null || l.dias < item.earliestDias) {
+          item.earliestDias = l.dias;
+          item.earliestLot = l;
+        }
+      });
+    });
+
+    const clientListRaw = Array.from(allEmpsMap.values());
+
+    // KPIs globais de clientes
+    const totalClientsCount = clientListRaw.length;
+    const withCavCount = clientListRaw.filter(c => c.totalCav > 0).length;
+    const totalCavInClients = clientListRaw.reduce((acc, c) => acc + c.totalCav, 0);
+    const lateClientsCount = clientListRaw.filter(c => c.lateQ > 0).length;
+
+    // Filtros e pesquisa
+    const qNorm = cliQ.toLowerCase().trim();
+    let filteredClients = clientListRaw.filter(c => {
+      if (cliF === 'com_cav' && c.totalCav === 0) return false;
+      if (cliF === 'atraso' && c.lateQ === 0) return false;
+      if (cliF === 'sem_cav' && c.totalCav > 0) return false;
+
+      if (qNorm) {
+        const matchName = c.name.toLowerCase().includes(qNorm);
+        const matchNif = (c.info?.nif || '').toLowerCase().includes(qNorm);
+        const matchResp = (c.info?.resp || '').toLowerCase().includes(qNorm);
+        const matchCity = (c.info?.morada || '').toLowerCase().includes(qNorm);
+        const matchObra = c.obras.some(
+          x => x.o.nome.toLowerCase().includes(qNorm) || x.o.cidade.toLowerCase().includes(qNorm)
+        );
+        return matchName || matchNif || matchResp || matchCity || matchObra;
+      }
+      return true;
+    });
+
+    // Ordenação
+    filteredClients.sort((a, b) => {
+      if (cliSort === 'nome') return a.name.localeCompare(b.name, 'pt');
+      if (cliSort === 'obras') return b.obras.length - a.obras.length;
+      if (cliSort === 'atraso') return b.lateQ - a.lateQ || b.totalCav - a.totalCav;
+      // 'cav' (default)
+      if (b.lateQ !== a.lateQ) return b.lateQ - a.lateQ;
+      return b.totalCav - a.totalCav || a.name.localeCompare(b.name, 'pt');
+    });
+
+    const chips = [
+      ['todos', 'Todos', totalClientsCount],
+      ['com_cav', 'Com cavaletes', withCavCount],
+      ['atraso', 'Fora do prazo', lateClientsCount],
+      ['sem_cav', 'Sem cavaletes', totalClientsCount - withCavCount],
+    ];
+
+    return (
+      <div key={`cli-${page}`} className="admin-page-anim">
+        <div className="pagehead">
+          <div>
+            <h1 className="ph">
+              <span className="phi"><Icon name="users" /></span>
+              <span>Clientes</span>
+            </h1>
+            <p className="ph-desc" style={{ color: 'var(--muted)', fontSize: '0.95rem', margin: '4px 0 0' }}>
+              Diretório de empresas parceiras, histórico de obras e controlo direto de cavaletes.
+            </p>
+          </div>
+          <div className="ph-act">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => openModal({ type: 'nova' })}
+            >
+              <Icon name="plus" />
+              Nova entrega
+            </button>
+          </div>
+        </div>
+
+        {/* KPIs de Clientes */}
+        <div className="kpis k4">
+          <div className="kpi">
+            <span className="top"><Icon name="users" />Total de empresas</span>
+            <span className="kvr"><span className="v num">{totalClientsCount}</span><small>clientes</small></span>
+          </div>
+          <div className="kpi">
+            <span className="top"><Icon name="cav" />Com cavaletes em obra</span>
+            <span className="kvr"><span className="v num">{withCavCount}</span><small>empresas</small></span>
+          </div>
+          <div className="kpi">
+            <span className="top"><Icon name="clock" />Cavaletes em clientes</span>
+            <span className="kvr"><span className="v num">{fmtN(totalCavInClients)}</span><small>cavaletes</small></span>
+          </div>
+          <div className={`kpi ${lateClientsCount > 0 ? 'late' : ''}`}>
+            <span className="top"><Icon name="alert" />Com prazos ultrapassados</span>
+            <span className="kvr"><span className="v num">{lateClientsCount}</span><small>clientes</small></span>
+          </div>
+        </div>
+
+        {/* Barra de Filtros e Pesquisa */}
+        <div className="toolbar" style={{ marginTop: '22px' }}>
+          <div className="search">
+            <Icon name="search" />
+            <input
+              type="text"
+              placeholder="Pesquisar por cliente, NIF, responsável ou obra..."
+              value={cliQ}
+              onChange={e => setCliQ(e.target.value)}
+            />
+            {cliQ && (
+              <button
+                type="button"
+                className="iconbtn"
+                onClick={() => setCliQ('')}
+                aria-label="Limpar pesquisa"
+              >
+                <Icon name="x" />
+              </button>
+            )}
+          </div>
+
+          <div className="chips" role="group" aria-label="Filtro de clientes">
+            {chips.map(([k, label, cnt]) => (
+              <button
+                key={k}
+                type="button"
+                className="chip"
+                aria-pressed={cliF === k}
+                onClick={() => setCliF(k)}
+              >
+                {label} <span className="n">{cnt}</span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 500 }}>Ordenar:</span>
+            <select
+              value={cliSort}
+              onChange={e => setCliSort(e.target.value)}
+              style={{
+                font: 'inherit',
+                fontSize: '0.88rem',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--line)',
+                background: 'var(--surface)',
+                color: 'var(--ink)',
+              }}
+            >
+              <option value="cav">Mais cavaletes</option>
+              <option value="atraso">Maior atraso</option>
+              <option value="obras">Mais obras</option>
+              <option value="nome">Nome (A – Z)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Lista de Clientes em Linha */}
+        {filteredClients.length === 0 ? (
+          <div className="card" style={{ padding: '36px', textAlign: 'center', marginTop: '16px' }}>
+            <p className="muted" style={{ fontSize: '1rem', margin: 0 }}>Nenhum cliente encontrado com estes filtros.</p>
+          </div>
+        ) : (
+          <div className="cli-list">
+            {filteredClients.map(c => {
+              const totFolder = Math.max(1, c.totalCav);
+              return (
+                <div
+                  key={c.name}
+                  className="cli-row"
+                  onClick={() => openEmpresa(c.name)}
+                >
+                  <div className="cli-row-left">
+                    <div className="cli-row-head">
+                      <b className="cli-row-name">{c.name}</b>
+                      {c.lateQ > 0 ? (
+                        <span className="pill tone-late" title={`${c.lateQ} cavaletes fora do prazo`}>
+                          <Icon name="alert" />
+                          {c.lateQ} fora do prazo
+                        </span>
+                      ) : c.totalCav > 0 ? (
+                        <span className="pill tone-ok">
+                          <Icon name="check" /> Regular
+                        </span>
+                      ) : (
+                        <span className="pill pill-sm" style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}>
+                          Sem cavaletes
+                        </span>
+                      )}
+                      {c.info?.morada && (
+                        <>
+                          <span className="cli-row-sep">·</span>
+                          <span style={{ color: 'var(--muted)', fontSize: '0.88rem' }}>{c.info.morada}</span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="cli-row-sub">
+                      <span>NIF {c.info.nif}</span>
+                      {c.info.resp && (
+                        <>
+                          <span className="cli-row-sep">·</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Icon name="user" /> {c.info.resp}
+                          </span>
+                        </>
+                      )}
+                      {/\d/.test(c.info.tel) && (
+                        <>
+                          <span className="cli-row-sep">·</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Icon name="phone" />
+                            <a
+                              className="tel-link"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              href={`tel:+351${c.info.tel.replace(/\D/g, '')}`}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {c.info.tel}
+                            </a>
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="cli-row-meta">
+                      <span style={{ fontWeight: 500 }}>
+                        {c.obras.length} obra{c.obras.length !== 1 ? 's' : ''} registada{c.obras.length !== 1 ? 's' : ''}
+                      </span>
+                      {c.transito > 0 && (
+                        <>
+                          <span className="cli-row-sep">·</span>
+                          <span style={{ color: 'var(--info)', fontWeight: 600 }}>
+                            +{c.transito} a caminho
+                          </span>
+                        </>
+                      )}
+                      {c.totalCav > 0 && c.earliestDias !== null && (
+                        <>
+                          <span className="cli-row-sep">·</span>
+                          <span style={{ color: c.earliestDias < 0 ? 'var(--late)' : 'var(--muted)', fontWeight: c.earliestDias < 0 ? 700 : 400 }}>
+                            {c.earliestDias < 0
+                              ? `Ultrapassado há ${Math.abs(c.earliestDias)} dias`
+                              : diasTxt(c.earliestDias)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="cli-row-mid">
+                    {c.totalCav > 0 ? (
+                      <div className="cli-row-prazo">
+                        <div className="fbar">
+                          {['late', 'soon', 'watch', 'ok'].map(s =>
+                            c.seg[s] ? (
+                              <i
+                                key={s}
+                                style={{
+                                  width: `${(c.seg[s] / totFolder) * 100}%`,
+                                  background: ST[s].soft,
+                                }}
+                                title={`${c.seg[s]} cavaletes`}
+                              />
+                            ) : null
+                          )}
+                        </div>
+                        <small className="muted">
+                          {c.lateQ > 0 ? (
+                            <span style={{ color: 'var(--late)', fontWeight: 600 }}>{c.lateQ} excederam limite</span>
+                          ) : (
+                            <span>Em dia</span>
+                          )}
+                        </small>
+                      </div>
+                    ) : (
+                      <div className="cli-row-prazo">
+                        <small className="muted">Sem cavaletes em posse</small>
+                      </div>
+                    )}
+
+                    <div className="cli-row-count">
+                      <span
+                        className="cli-row-num num"
+                        style={{ color: c.lateQ > 0 ? 'var(--late)' : c.totalCav > 0 ? 'var(--ink)' : 'var(--muted)' }}
+                      >
+                        {c.totalCav}
+                      </span>
+                      <small className="muted">cavaletes</small>
+                    </div>
+                  </div>
+
+                  <div className="cli-row-actions" onClick={e => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="btn-al-open"
+                      onClick={() => openEmpresa(c.name)}
+                    >
+                      Abrir ↗
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => openModal({ type: 'nova', empresa: c.name })}
+                      title="Nova entrega para este cliente"
+                    >
+                      <Icon name="plus" />
+                      <span>Nova entrega</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ================= PÁGINA OBRAS =================
+  if (page === 'obras') {
     // ---------------- FICHA DA OBRA ----------------
     if (obraId) {
       const o = obras.find(x => x.id === obraId);
@@ -1637,153 +1991,302 @@ export default function EscritorioView() {
     const nLog = peds.filter(p => p.estado === 'logistica').length;
     const nAg = peds.filter(p => p.estado === 'agendado').length;
 
+    const lateList = g('late');
+    const soonList = g('soon');
+    const watchList = g('watch');
+
+    const totalAlertas = difs.length + peds.length + lateList.length + soonList.length;
+
+    const fmtSlashDate = d => {
+      if (!d) return '—';
+      const dt = d instanceof Date ? d : (typeof d === 'string' ? parseIso(d) : new Date(d));
+      if (!dt || isNaN(dt.getTime())) return String(d);
+      const day = String(dt.getDate()).padStart(2, '0');
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const y = dt.getFullYear();
+      return `${day}/${m}/${y}`;
+    };
+
     const groups = [
       {
-        k: 'dif',
-        t: 'Diferenças nas entregas',
-        tone: 'warn',
-        icon: 'diff',
-        n: difs.length,
-        sub: difs.length
-          ? `${difs.length} entrega${difs.length > 1 ? 's' : ''} com números que não batem certo`
-          : 'Tudo bate certo',
-        items: difs.map(m => {
-          const o = obras.find(x => x.id === m.obraId);
-          return (
-            <div key={m.id} className="aitem">
-              <span className="ic tone-warn"><Icon name="diff" /></span>
-              <div className="t">
-                <b>Entrega {m.guia} · {o?.nome}</b>
-                <span>
-                  Vidraria {m.qtd} · motorista {m.qtdMot ?? '—'} · cliente {m.qtdCli ?? '—'}
-                </span>
+        k: 'late',
+        dot: 'is-red',
+        t: `Prazo Terminado — Urgente (${lateList.length})`,
+        sub: `(Entregas com mais de ${PRAZO} dias de permanência na obra)`,
+        items: lateList.map(({ o, r }) => (
+          <div key={o.id} className="al-card">
+            <div className="al-card-main">
+              <div className="al-card-row1">
+                <span className="al-card-obra">{o.nome}</span>
+                <span className="al-sep">·</span>
+                <span className="al-card-cidade">{o.cidade}</span>
               </div>
+              <div className="al-card-row2">
+                <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
+              </div>
+              <div className="al-card-row3">
+                <span>{r.first?.qtd || r.total} cavaletes na obra</span>
+                <span className="al-sep">·</span>
+                <span className="al-tag-late">Ultrapassado há {Math.abs(r.dias)} dias</span>
+                <span className="al-sep">·</span>
+                <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+              </div>
+            </div>
+            <div className="al-card-actions">
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => openModal({ type: 'resolver', id: m.id })}
+                className="btn-al-open"
+                onClick={() => openObra(o.id)}
               >
-                Resolver
+                Abrir ↗
               </button>
+              <button
+                type="button"
+                className="btn-al-action is-red"
+                onClick={() =>
+                  openModal({
+                    type: 'email',
+                    obraId: o.id,
+                    tpl: 'terminado',
+                  })
+                }
+              >
+                <Icon name="mail" />
+                <span>Preparar email</span>
+              </button>
+            </div>
+          </div>
+        )),
+      },
+      {
+        k: 'soon',
+        dot: 'is-orange',
+        t: `Termina nos Próximos 30 Dias (${soonList.length})`,
+        sub: `(Recomendado envio de lembrete com antecedência)`,
+        items: soonList.map(({ o, r }) => (
+          <div key={o.id} className="al-card">
+            <div className="al-card-main">
+              <div className="al-card-row1">
+                <span className="al-card-obra">{o.nome}</span>
+                <span className="al-sep">·</span>
+                <span className="al-card-cidade">{o.cidade}</span>
+              </div>
+              <div className="al-card-row2">
+                <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
+              </div>
+              <div className="al-card-row3">
+                <span>{r.first?.qtd || r.total} cavaletes na obra</span>
+                <span className="al-sep">·</span>
+                <span className="al-tag-soon">Faltam {r.dias} dias para o limite</span>
+                <span className="al-sep">·</span>
+                <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+              </div>
+            </div>
+            <div className="al-card-actions">
+              <button
+                type="button"
+                className="btn-al-open"
+                onClick={() => openObra(o.id)}
+              >
+                Abrir ↗
+              </button>
+              <button
+                type="button"
+                className="btn-al-action is-dark"
+                onClick={() =>
+                  openModal({
+                    type: 'email',
+                    obraId: o.id,
+                    tpl: 'amigavel',
+                  })
+                }
+              >
+                <Icon name="mail" />
+                <span>Preparar email</span>
+              </button>
+            </div>
+          </div>
+        )),
+      },
+      {
+        k: 'dif',
+        dot: 'is-amber',
+        t: `Diferenças nas Entregas (${difs.length})`,
+        sub: `(Entregas com números que não batem certo por resolver)`,
+        items: difs.map(m => {
+          const o = obras.find(x => x.id === m.obraId);
+          const diffQtd = Math.abs(m.qtd - (m.qtdCli ?? m.qtd));
+          return (
+            <div key={m.id} className="al-card">
+              <div className="al-card-main">
+                <div className="al-card-row1">
+                  <span className="al-card-obra">Guia {m.guia}</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-card-obra" style={{ fontWeight: 600 }}>{o?.nome || 'Obra não encontrada'}</span>
+                  {o?.cidade && (
+                    <>
+                      <span className="al-sep">·</span>
+                      <span className="al-card-cidade">{o.cidade}</span>
+                    </>
+                  )}
+                </div>
+                <div className="al-card-row2">
+                  <span className="al-card-emp" onClick={() => o && openEmpresa(o.empresa)}>{o?.empresa}</span>
+                  {m.motorista && (
+                    <>
+                      <span className="al-sep" style={{ margin: '0 6px' }}>·</span>
+                      <span>Motorista: Sr. {m.motorista}</span>
+                    </>
+                  )}
+                </div>
+                <div className="al-card-row3">
+                  <span className="al-tag-soon">{diffQtd} cavalete{diffQtd > 1 ? 's' : ''} em falta</span>
+                  <span className="al-sep">·</span>
+                  <span>Vidraria: <b>{m.qtd}</b></span>
+                  <span className="al-sep">·</span>
+                  <span>Cliente: <b style={{ color: 'var(--warn)' }}>{m.qtdCli ?? '—'}</b></span>
+                  <span className="al-sep">·</span>
+                  <span className="al-limite">Data: {fmtSlashDate(m.data)}</span>
+                </div>
+              </div>
+              <div className="al-card-actions">
+                {o && (
+                  <button
+                    type="button"
+                    className="btn-al-open"
+                    onClick={() => openObra(o.id)}
+                  >
+                    Abrir ↗
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-al-action is-amber"
+                  onClick={() => openModal({ type: 'resolver', id: m.id })}
+                >
+                  <Icon name="check" />
+                  <span>Resolver diferença</span>
+                </button>
+              </div>
             </div>
           );
         }),
       },
       {
         k: 'ped',
-        t: 'Pedidos de recolha',
-        tone: 'info',
-        icon: 'hand',
-        n: nPend,
-        sub:
-          [
-            nPend > 0 && `${nPend} por marcar`,
-            nLog > 0 && `${nLog} na logística`,
-            nAg > 0 && `${nAg} marcada${nAg > 1 ? 's' : ''}`,
-          ]
-            .filter(Boolean)
-            .join(' · ') || 'Sem pedidos',
+        dot: 'is-blue',
+        t: `Pedidos de Recolha (${peds.length})`,
+        sub: `(Pedidos efetuados pelos clientes a aguardar recolha)`,
         items: peds.map(p => {
           const o = obras.find(x => x.id === p.obraId);
+          const isPend = p.estado === 'pendente';
+          const isLog = p.estado === 'logistica';
           return (
-            <div key={p.id} className="aitem">
-              <span className="ic tone-info"><Icon name="hand" /></span>
-              <div className="t">
-                <b>{p.qtd} cavaletes · {o?.nome}</b>
-                <span>
-                  Pedido {rel(p.data)} pelo cliente ·{' '}
-                  {p.estado === 'pendente'
-                    ? 'por marcar'
-                    : p.estado === 'logistica'
-                    ? 'na logística · falta o motorista'
-                    : p.estado === 'agendado'
-                    ? `recolha a ${fd(parseIso(p.dataRec))} · Sr. ${p.mot}`
-                    : 'recolhido'}
-                </span>
+            <div key={p.id} className="al-card">
+              <div className="al-card-main">
+                <div className="al-card-row1">
+                  <span className="al-card-obra">{o?.nome || 'Obra'}</span>
+                  {o?.cidade && (
+                    <>
+                      <span className="al-sep">·</span>
+                      <span className="al-card-cidade">{o.cidade}</span>
+                    </>
+                  )}
+                </div>
+                <div className="al-card-row2">
+                  <span className="al-card-emp" onClick={() => o && openEmpresa(o.empresa)}>{o?.empresa}</span>
+                </div>
+                <div className="al-card-row3">
+                  <span><b>{p.qtd}</b> cavaletes para recolha</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-tag-info">{isPend ? 'Por marcar' : isLog ? 'Na logística' : 'Agendada'}</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-limite">Pedido {rel(p.data)}</span>
+                </div>
               </div>
-              {p.estado === 'pendente' ? (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    if (!p.guia) p.guia = 'GR-2026/' + (1400 + pedidos.indexOf(p) + 1);
-                    openModal({ type: 'mrec', pid: p.id });
-                  }}
-                >
-                  Marcar
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => window.print()}
-                >
-                  <Icon name="print" />Imprimir
-                </button>
-              )}
+              <div className="al-card-actions">
+                {o && (
+                  <button
+                    type="button"
+                    className="btn-al-open"
+                    onClick={() => openObra(o.id)}
+                  >
+                    Abrir ↗
+                  </button>
+                )}
+                {isPend ? (
+                  <button
+                    type="button"
+                    className="btn-al-action is-blue"
+                    onClick={() => {
+                      if (!p.guia) p.guia = 'GR-2026/' + (1400 + pedidos.indexOf(p) + 1);
+                      openModal({ type: 'mrec', pid: p.id });
+                    }}
+                  >
+                    <Icon name="cal" />
+                    <span>Marcar recolha</span>
+                  </button>
+                ) : isLog ? (
+                  <button
+                    type="button"
+                    className="btn-al-action is-dark"
+                    onClick={() => openModal({ type: 'atrib', pid: p.id })}
+                  >
+                    <Icon name="truck" />
+                    <span>Atribuir motorista</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-al-open"
+                    onClick={() => window.print()}
+                  >
+                    <Icon name="print" />
+                    <span>Imprimir guia</span>
+                  </button>
+                )}
+              </div>
             </div>
           );
         }),
       },
-      ...[
-        ['late', 'Prazo terminado'],
-        ['soon', 'Na obra há 50 a 60 dias'],
-        ['watch', 'Na obra há 30 a 50 dias'],
-      ].map(([k, label]) => {
-        const L = g(k);
-        return {
-          k,
-          t: label,
-          tone: ST[k].tone,
-          icon: ST[k].icon,
-          n: L.length,
-          sub: sumQ(L),
-          items: L.map(({ o, r }) => (
-            <div key={o.id} className="aitem">
-              <span className={`ic tone-${ST[r.st].tone}`}><Icon name={ST[r.st].icon} /></span>
-              <div className="t">
-                <b>{o.nome} · {r.first?.qtd} cavaletes</b>
-                <span>
-                  {o.empresa} · {o.cidade} · {diasTxt(r.dias)}
-                  {lembretes[o.id] && (
-                    <> · <b style={{ display: 'inline', color: 'var(--ok)' }}>lembrete enviado {rel(lembretes[o.id])}</b></>
-                  )}
-                </span>
+      {
+        k: 'watch',
+        dot: 'is-slate',
+        t: `Na Obra há 30 a 50 Dias (${watchList.length})`,
+        sub: `(Monitorização e acompanhamento de rotina)`,
+        items: watchList.map(({ o, r }) => (
+          <div key={o.id} className="al-card">
+            <div className="al-card-main">
+              <div className="al-card-row1">
+                <span className="al-card-obra">{o.nome}</span>
+                <span className="al-sep">·</span>
+                <span className="al-card-cidade">{o.cidade}</span>
               </div>
+              <div className="al-card-row2">
+                <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
+              </div>
+              <div className="al-card-row3">
+                <span>{r.first?.qtd || r.total} cavaletes na obra</span>
+                <span className="al-sep">·</span>
+                <span className="al-tag-info">Faltam {r.dias} dias para o limite</span>
+                <span className="al-sep">·</span>
+                <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+              </div>
+            </div>
+            <div className="al-card-actions">
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="btn-al-open"
                 onClick={() => openObra(o.id)}
               >
-                Abrir
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() =>
-                  openModal({
-                    type: 'email',
-                    obraId: o.id,
-                    tpl: r.st === 'late' ? 'terminado' : 'amigavel',
-                  })
-                }
-              >
-                Preparar email
+                Abrir ↗
               </button>
             </div>
-          )),
-        };
-      }),
+          </div>
+        )),
+      },
     ];
-
-    // Grupo aberto por omissão (o mais urgente)
-    const activeGroupKey =
-      aOpen !== null
-        ? aOpen
-        : groups.find(x => x.k === 'dif' && x.n > 0)?.k ||
-          groups.find(x => x.k === 'late' && x.n > 0)?.k ||
-          groups.find(x => x.n > 0)?.k ||
-          'dif';
 
     return (
       <>
@@ -1806,51 +2309,111 @@ export default function EscritorioView() {
           </button>
         </div>
 
-        <div className="acc">
-          {groups.map(grp => {
-            const isOpen = activeGroupKey === grp.k;
-            return (
-              <div key={grp.k} className="acc-g">
-                <button
-                  type="button"
-                  className="acc-h"
-                  aria-expanded={isOpen}
-                  onClick={() => setAOpen(isOpen ? '' : grp.k)}
-                >
-                  <span className={`ic tone-${grp.tone}`}><Icon name={grp.icon} /></span>
-                  <div>
-                    <b>{grp.t}</b>
-                    <span className="muted">{grp.sub}</span>
-                  </div>
-                  <span className="count">{grp.n}</span>
-                  <svg
-                    className={`chev${isOpen ? ' open' : ''}`}
-                    viewBox="0 0 24 24"
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </button>
-                {isOpen && (
-                  <div className="acc-b">
-                    {grp.items.length === 0 ? (
-                      <p className="muted" style={{ padding: '16px 0', textAlign: 'center' }}>
-                        Nenhum alerta nesta secção.
-                      </p>
-                    ) : (
-                      grp.items
-                    )}
-                  </div>
-                )}
+        {/* 4 Blocos Principais de Alerta (KPIs Visuais) */}
+        <div className="alert-kpis">
+          <div
+            className="alert-kpi-card"
+            style={{ '--kpi-color': 'var(--warn)', cursor: 'pointer' }}
+            onClick={() => document.getElementById('sec-dif')?.scrollIntoView({ behavior: 'smooth' })}
+          >
+            <div className="alert-kpi-head">
+              <div className="alert-kpi-val-wrap">
+                <span className="alert-kpi-icon tone-warn"><Icon name="diff" /></span>
+                <span className="val num">{difs.length}</span>
               </div>
-            );
-          })}
+              <span className="pill tone-warn pill-sm">
+                {difs.length > 0 ? 'Atenção' : 'OK'}
+              </span>
+            </div>
+            <div className="alert-kpi-body">
+              <span className="lbl">Diferenças</span>
+              <span className="sub">Nas guias de entrega</span>
+            </div>
+          </div>
+
+          <div
+            className="alert-kpi-card"
+            style={{ '--kpi-color': 'var(--info)', cursor: 'pointer' }}
+            onClick={() => document.getElementById('sec-ped')?.scrollIntoView({ behavior: 'smooth' })}
+          >
+            <div className="alert-kpi-head">
+              <div className="alert-kpi-val-wrap">
+                <span className="alert-kpi-icon tone-info"><Icon name="hand" /></span>
+                <span className="val num">{peds.length}</span>
+              </div>
+              <span className="pill tone-info pill-sm">
+                {nPend} por marcar
+              </span>
+            </div>
+            <div className="alert-kpi-body">
+              <span className="lbl">Pedidos de Recolha</span>
+              <span className="sub">{nPend} por marcar</span>
+            </div>
+          </div>
+
+          <div
+            className="alert-kpi-card"
+            style={{ '--kpi-color': 'var(--late)', cursor: 'pointer' }}
+            onClick={() => document.getElementById('sec-late')?.scrollIntoView({ behavior: 'smooth' })}
+          >
+            <div className="alert-kpi-head">
+              <div className="alert-kpi-val-wrap">
+                <span className="alert-kpi-icon tone-late"><Icon name="alert" /></span>
+                <span className="val num">{lateList.length}</span>
+              </div>
+              <span className="pill tone-late pill-sm">
+                {lateList.length > 0 ? 'Crítico' : 'Zero'}
+              </span>
+            </div>
+            <div className="alert-kpi-body">
+              <span className="lbl">Prazos Expirados</span>
+              <span className="sub">&gt; 60 dias no cliente</span>
+            </div>
+          </div>
+
+          <div
+            className="alert-kpi-card"
+            style={{ '--kpi-color': '#d97706', cursor: 'pointer' }}
+            onClick={() => document.getElementById('sec-soon')?.scrollIntoView({ behavior: 'smooth' })}
+          >
+            <div className="alert-kpi-head">
+              <div className="alert-kpi-val-wrap">
+                <span className="alert-kpi-icon" style={{ background: '#fef3c7', color: '#d97706' }}><Icon name="clock" /></span>
+                <span className="val num">{soonList.length}</span>
+              </div>
+              <span className="pill pill-sm" style={{ background: '#fef3c7', color: '#d97706' }}>
+                Prevenção
+              </span>
+            </div>
+            <div className="alert-kpi-body">
+              <span className="lbl">A Terminar</span>
+              <span className="sub">50 a 60 dias na obra</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de Grupos em Cards Elegantes */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', marginTop: '12px' }}>
+          {groups.map(grp => (
+            <section key={grp.k} id={`sec-${grp.k}`} className="al-group">
+              <div className="al-group-hd">
+                <span className={`al-dot ${grp.dot}`} />
+                <h3 className="al-group-title">{grp.t}</h3>
+                <span className="al-group-sub">{grp.sub}</span>
+              </div>
+
+              {grp.items.length === 0 ? (
+                <div className="al-empty">
+                  <Icon name="check" />
+                  <span>Sem pendências nesta secção — tudo regularizado.</span>
+                </div>
+              ) : (
+                <div className="al-cards-stack">
+                  {grp.items}
+                </div>
+              )}
+            </section>
+          ))}
         </div>
       </>
     );
@@ -1890,6 +2453,224 @@ export default function EscritorioView() {
               <small>Cavalete duplo n.º</small>
               <b>3127</b>
               <small style={{ marginTop: '8px' }}>Propriedade da empresa. Devolver no prazo de 60 dias.</small>
+            </div>
+          </div>
+        </section>
+
+        <div className="compare">
+          <div className="card">
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '4px' }}>Papel e Excel (hoje)</h3>
+            <ul>
+              <li><Icon name="x" /><span>O 5 escrito à mão parece um 8</span></li>
+              <li><Icon name="x" /><span>Três folhas com números diferentes</span></li>
+              <li><Icon name="x" /><span>Prazos contados à mão, obra a obra</span></li>
+            </ul>
+          </div>
+          <div className="card">
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '4px' }}>Máquina de picagem</h3>
+            <ul>
+              <li><Icon name="x" /><span>Equipamento próprio para comprar e manter</span></li>
+              <li><Icon name="x" /><span>Só lê onde a máquina está</span></li>
+              <li><Icon name="check" style={{ color: 'var(--ok)' }} /><span>Acaba com os erros de escrita</span></li>
+            </ul>
+          </div>
+          <div className="card best">
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '4px' }}>Etiqueta QR + telemóvel</h3>
+            <ul>
+              <li><Icon name="check" style={{ color: 'var(--ok)' }} /><span>Usa o telemóvel que todos já têm</span></li>
+              <li><Icon name="check" style={{ color: 'var(--ok)' }} /><span>Funciona na fábrica e em qualquer obra</span></li>
+              <li><Icon name="check" style={{ color: 'var(--ok)' }} /><span>Data, hora e motorista registados sozinhos</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <section className="card qrsearch">
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>Experimente: procurar um cavalete</h3>
+
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                border: '1.5px solid var(--line)',
+                borderRadius: '12px',
+                padding: '0 16px',
+                background: 'var(--surface)',
+                minHeight: '48px',
+              }}
+            >
+              <Icon name="scan" style={{ width: '20px', height: '20px', color: 'var(--muted)', flexShrink: 0 }} />
+              <input
+                type="text"
+                value={qrBusca}
+                onChange={(e) => setQrBusca(e.target.value)}
+                placeholder="Número do cavalete..."
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  width: '100%',
+                  fontSize: '1rem',
+                  color: 'var(--ink)',
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{
+                borderRadius: '12px',
+                padding: '0 24px',
+                minHeight: '48px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Icon name="search" />
+              <span>Procurar</span>
+            </button>
+          </div>
+
+          <div className="qrsearch-grid">
+            <div
+              style={{
+                border: '1px solid var(--line)',
+                borderRadius: '16px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+                background: 'var(--surface)',
+              }}
+            >
+              <div>
+                <small style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                  CAVALETE DUPLO N.º 3127
+                </small>
+                <h4 style={{ fontSize: '1.2rem', fontWeight: 700, margin: '6px 0 2px', color: 'var(--ink)' }}>
+                  Pavilhão industrial Horizonte
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--muted)' }}>
+                  Serralharia Fonseca · Faro
+                </p>
+              </div>
+
+              <div>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#e0f2fe',
+                    color: '#0284c7',
+                    padding: '4px 12px',
+                    borderRadius: '999px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  <Icon name="clock" style={{ width: '15px', height: '15px' }} />
+                  A acompanhar
+                </span>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--ink)' }}>
+                Na obra desde <b>15 set. 2026</b> · faltam 16 dias
+              </p>
+
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => openObra('o13')}
+                  style={{
+                    borderRadius: '10px',
+                    padding: '8px 16px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.9rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  <span>Abrir obra</span>
+                  <Icon name="right" style={{ width: '14px', height: '14px' }} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '6px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: '#e0f2fe',
+                    color: '#0284c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon name="scan" style={{ width: '20px', height: '20px' }} />
+                </div>
+                <div>
+                  <b style={{ display: 'block', fontSize: '0.95rem', color: 'var(--ink)' }}>Lido na entrega</b>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>15 set. 2026 · Faro</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: '#dcfce7',
+                    color: '#16a34a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon name="factory" style={{ width: '20px', height: '20px' }} />
+                </div>
+                <div>
+                  <b style={{ display: 'block', fontSize: '0.95rem', color: 'var(--ink)' }}>Voltou à fábrica</b>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>6 jun. 2026 · Mortágua</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon name="scan" style={{ width: '20px', height: '20px' }} />
+                </div>
+                <div>
+                  <b style={{ display: 'block', fontSize: '0.95rem', color: 'var(--ink)' }}>Lido na entrega anterior</b>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>25 mar. 2026 · Edifício Mondego</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>

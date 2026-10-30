@@ -32,6 +32,7 @@ export default function Sidebar() {
   const navEscritorio = [
     ['inicio', 'home', 'Início', 'Início', null],
     ['obras', 'obra', 'Obras', 'Obras', null],
+    ['clientes', 'users', 'Clientes', 'Clientes', null],
     ['cavaletes', 'cav', 'Cavaletes', 'Cav.', null],
     ['mapa', 'pin', 'Mapa', 'Mapa', null],
     ['entregas', 'truck', 'Movimentos', 'Mov.', null],
@@ -42,7 +43,7 @@ export default function Sidebar() {
   const navAdmin = [
     ['inicio', 'home', 'Painel', 'Painel', null],
     ['obras', 'obra', 'Obras', 'Obras', null],
-    ['clientes', 'rank', 'Clientes', 'Clientes', null],
+    ['clientes', 'users', 'Clientes', 'Clientes', null],
     ['financeiro', 'euro', 'Financeiro', 'Fin.', null],
     ['atividade', 'clock', 'Atividade', 'Ativ.', null],
   ];
@@ -78,8 +79,7 @@ export default function Sidebar() {
   return (
     <aside className="side">
       <div className="brand">
-        <img className="logo-lt" src={IMG.logo} alt="Vidraria Mortágua — vidros & espelhos, S.A." />
-        <img className="logo-dk" src={IMG.logoDk} alt="Vidraria Mortágua — vidros & espelhos, S.A." />
+        <img className="brand-logo" src={IMG.logo} alt="Vidraria Mortágua — vidros & espelhos, S.A." />
       </div>
 
       <nav className="nav" aria-label="Menu">

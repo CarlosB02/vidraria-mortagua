@@ -403,55 +403,8 @@ export function atividade(
   });
 
   obras.forEach(o => {
-    const lot = lots(o, movs);
     const r = resumo(o, movs);
     const ob = `${o.nome} · ${o.cidade}`;
-    lot.forEach(l => {
-      const d15 = addDays(l.prazo, -15);
-      if (auto.d30 && d15 <= TODAY) {
-        ev0({
-          d: d15,
-          mi: hr(o.id + l.mov.id + 'a', 7, 1),
-          quem: 'Email automático',
-          papel: 'Sistema',
-          g: 'sis',
-          titulo: 'Lembrete amigável enviado',
-          desc: `Faltam 15 dias para o prazo de ${l.qtd} cavaletes. Enviado para ${esc(o.email)}.`,
-          guia: l.mov.guia,
-          obra: ob,
-          q: l.qtd,
-        });
-      }
-      const d7 = addDays(l.prazo, -7);
-      if (auto.d7 && d7 <= TODAY) {
-        ev0({
-          d: d7,
-          mi: hr(o.id + l.mov.id + 'd7', 7, 2),
-          quem: 'Email automático',
-          papel: 'Sistema',
-          g: 'sis',
-          titulo: 'Pedido de data de recolha',
-          desc: `Faltam 7 dias para o prazo de ${l.qtd} cavaletes. Pedido de data enviado para ${esc(o.email)}.`,
-          guia: l.mov.guia,
-          obra: ob,
-          q: l.qtd,
-        });
-      }
-      if (auto.d0 && l.prazo <= TODAY) {
-        ev0({
-          d: l.prazo,
-          mi: hr(o.id + l.mov.id + 'b', 7, 1),
-          quem: 'Email automático',
-          papel: 'Sistema',
-          g: 'sis',
-          titulo: 'Aviso de prazo terminado',
-          desc: `Terminou o prazo de ${l.qtd} cavaletes. Enviado para ${esc(o.email)}.`,
-          guia: l.mov.guia,
-          obra: ob,
-          q: l.qtd,
-        });
-      }
-    });
 
     if (lembretes[o.id]) {
       ev0({

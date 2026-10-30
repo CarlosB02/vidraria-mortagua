@@ -46,6 +46,52 @@ export default function ClienteView() {
   const [lastPos, setLastPos] = useState(null);
   const [cxInput, setCxInput] = useState('');
 
+  // Dropdown "Ver como o cliente" com branding
+  const pickerRef = useRef(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handleClickOutside = e => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setPickerOpen(false);
+      }
+    };
+    const handleKeyDown = e => {
+      if (e.key === 'Escape') setPickerOpen(false);
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [pickerOpen]);
+
+  const handleSelectEmp = emp => {
+    const target =
+      obras.find(x => x.empresa === emp && movs.some(m => m.obraId === x.id && m.estado === 'em_viagem')) ||
+      obras.find(x => x.empresa === emp && resumo(x, movs).total > 0) ||
+      obras.find(x => x.empresa === emp);
+    if (target) {
+      setCli(c => ({
+        ...c,
+        obraId: target.id,
+        qty: null,
+        outro: false,
+        sig: null,
+        err: '',
+        done: null,
+        recolha: false,
+        rq: 0,
+        miss: [],
+        extra: [],
+        respOpen: false,
+      }));
+    }
+    setPickerOpen(false);
+  };
+
   // Configuração do Canvas de Assinatura
   useEffect(() => {
     const c = canvasRef.current;
@@ -113,7 +159,7 @@ export default function ClienteView() {
         <p className="muted">{cli.done.s}</p>
         <button
           type="button"
-          className="btn btn-primary btn-xl btn-block"
+          className="btn btn-primary btn-block"
           onClick={() => setCli(prev => ({ ...prev, done: null }))}
         >
           Continuar
@@ -164,7 +210,7 @@ export default function ClienteView() {
 
         <button
           type="button"
-          className="btn btn-primary btn-xl btn-block"
+          className="btn btn-primary btn-block"
           onClick={() => clientePedirRecolha({ obraId: cli.obraId, qty: cli.rq || 1 })}
         >
           <Icon name="send" />Pedir recolha
@@ -420,7 +466,7 @@ export default function ClienteView() {
 
         <button
           type="button"
-          className="btn btn-ok btn-xl btn-block"
+          className="btn btn-ok btn-block"
           onClick={() => {
             const nomeFinal = (cli.nome || o?.contacto || '').trim();
             if (!nomeFinal) {
@@ -512,7 +558,12 @@ export default function ClienteView() {
 
             {totalCavaletes > 0 && tiposKeys.length > 0 && (
               <>
-                <div className="cd-bar" role="img" aria-label="Distribuição por tipo de cavalete">
+                <div
+                  className="cd-bar"
+                  key={`cd-bar-${totalCavaletes}-${tiposKeys.join('-')}-${cli.resp}`}
+                  role="img"
+                  aria-label="Distribuição por tipo de cavalete"
+                >
                   {tiposKeys.map(k => (
                     <i
                       key={k}
@@ -525,7 +576,10 @@ export default function ClienteView() {
                     />
                   ))}
                 </div>
-                <div className="cd-lg">
+                <div
+                  className="cd-lg"
+                  key={`cd-lg-${totalCavaletes}-${tiposKeys.join('-')}-${cli.resp}`}
+                >
                   {tiposKeys.map(k => (
                     <span key={k}>
                       <i className={`tdot t-${k}`} />
@@ -607,22 +661,23 @@ export default function ClienteView() {
               )}
 
               {ro.total > 0 && (
-                <>
+                <div className="cobra-actions">
                   <button
                     type="button"
-                    className="linkbtn numslink"
+                    className="numslink"
                     onClick={() => openModal({ type: 'cavnums', obraId: x.id })}
+                    title="Ver números de série dos cavaletes"
                   >
                     <Icon name="info" />Ver números dos cavaletes
                   </button>
                   <button
                     type="button"
-                    className="btn btn-ghost btn-block"
+                    className="btn btn-ghost btn-sm cobra-rec-btn"
                     onClick={() => setCli(prev => ({ ...prev, obraId: x.id, recolha: true, rq: ro.total }))}
                   >
-                    <Icon name="hand" />Pedir recolha desta obra
+                    <Icon name="hand" />Pedir recolha
                   </button>
-                </>
+                </div>
               )}
             </div>
           );
@@ -648,7 +703,8 @@ export default function ClienteView() {
                       <button
                         type="button"
                         className="infobtn"
-                        aria-label="Ver números"
+                        aria-label="Ver números dos cavaletes"
+                        title="Ver números dos cavaletes"
                         onClick={() => openModal({ type: 'cavnums', movId: m.id, cli: true })}
                       >
                         <Icon name="info" />
@@ -801,42 +857,86 @@ export default function ClienteView() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', minWidth: 0 }}>
-        {/* Seletor de simulação de cliente */}
-        <div className="picker">
-          <span className="muted" style={{ fontSize: '0.88em' }}>Ver como o cliente:</span>
-          <select
-            id="cliobra"
-            aria-label="Escolher cliente"
-            value={o?.empresa}
-            onChange={e => {
-              const emp = e.target.value;
-              const target =
-                obras.find(x => x.empresa === emp && movs.some(m => m.obraId === x.id && m.estado === 'em_viagem')) ||
-                obras.find(x => x.empresa === emp && resumo(x, movs).total > 0) ||
-                obras.find(x => x.empresa === emp);
-              if (target) {
-                setCli(c => ({
-                  ...c,
-                  obraId: target.id,
-                  qty: null,
-                  outro: false,
-                  sig: null,
-                  err: '',
-                  done: null,
-                  recolha: false,
-                  rq: 0,
-                  miss: [],
-                  extra: [],
-                }));
-              }
-            }}
+        {/* Seletor de simulação de cliente com branding Vidraria Mortágua */}
+        <div className="cli-picker" ref={pickerRef}>
+          <div className="cli-picker-label">
+            <Icon name="user" />
+            <span>Ver como o cliente</span>
+          </div>
+
+          <button
+            type="button"
+            className={`cli-picker-btn ${pickerOpen ? 'is-open' : ''}`}
+            onClick={() => setPickerOpen(v => !v)}
+            aria-expanded={pickerOpen}
+            aria-haspopup="listbox"
           >
-            {emps.map(e => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
+            <span className="cli-picker-av">{iniciais(o?.empresa || 'Cliente')}</span>
+            <div className="cli-picker-info">
+              <b>{o?.empresa}</b>
+              <small>{r.total} cavaletes em obra · {eu?.nome}</small>
+            </div>
+            <svg
+              className="cli-picker-chev"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          {pickerOpen && (
+            <div className="cli-picker-menu" role="listbox">
+              <div className="cli-picker-menu-head">
+                <span>Escolher cliente para simular</span>
+              </div>
+              <div className="cli-picker-menu-list">
+                {emps.map(e => {
+                  const isSelected = e === o?.empresa;
+                  const eObras = obras.filter(x => x.empresa === e);
+                  const eCav = eObras.reduce((n, x) => n + resumo(x, movs).total, 0);
+                  const eTransit = movs.some(m => eObras.some(x => x.id === m.obraId) && m.estado === 'em_viagem');
+                  const eLate = eObras.reduce((n, x) => n + resumo(x, movs).lateQ, 0);
+
+                  return (
+                    <button
+                      key={e}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={`cli-picker-opt ${isSelected ? 'is-selected' : ''}`}
+                      onClick={() => handleSelectEmp(e)}
+                    >
+                      <span className="cli-picker-av">{iniciais(e)}</span>
+                      <div className="cli-picker-opt-txt">
+                        <b>{e}</b>
+                        <small>
+                          {eCav} cavaletes · {eObras.length} obra{eObras.length > 1 ? 's' : ''}
+                          {eTransit && ' · 🚚 a caminho'}
+                        </small>
+                      </div>
+                      {eLate > 0 && (
+                        <span className="fbadge" style={{ fontSize: '0.7rem', padding: '1px 6px', flexShrink: 0 }}>
+                          {eLate} fora do prazo
+                        </span>
+                      )}
+                      {isSelected && (
+                        <span className="cli-picker-check">
+                          <Icon name="check" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="phone">

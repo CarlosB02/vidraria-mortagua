@@ -40,6 +40,7 @@ export default function AdminView() {
     page,
     setPageState,
     setObraId,
+    openEmpresa,
     setOg,
     setOgSel,
     setFiltro,
@@ -120,11 +121,12 @@ export default function AdminView() {
 
   // ================= PÁGINA PAINEL =================
   if (page === 'inicio') {
+    const okNoPrazo = Math.max(0, t.emObra - t.late);
     const parts = [
-      { l: 'Na fábrica', v: c.fab, col: 'var(--ok)' },
-      { l: 'Em obra, dentro do prazo', v: c.ok, col: 'var(--info)' },
-      { l: 'Em obra, fora do prazo', v: c.late, col: 'var(--late)' },
-      { l: 'A caminho', v: c.cam, col: 'var(--warn)' },
+      { l: 'Na fábrica', v: t.fabrica, col: 'var(--ok)' },
+      { l: 'Em obra, dentro do prazo', v: okNoPrazo, col: 'var(--info)' },
+      { l: 'Em obra, fora do prazo', v: t.late, col: 'var(--late)' },
+      { l: 'A caminho', v: t.transito, col: 'var(--warn)' },
     ];
 
     const tipos = Object.entries(TIPOS_CAV).map(([k, T]) => {
@@ -137,7 +139,20 @@ export default function AdminView() {
     // Donut SVG
     const donutR = 70;
     const donutC = 2 * Math.PI * donutR;
-    let off = 0;
+    const validParts = parts.filter(p => p.v > 0);
+    let accumAngle = 0;
+    const slices = validParts.map(p => {
+      const pct = p.v / (FROTA || 1);
+      const len = pct * donutC;
+      const angle = accumAngle;
+      accumAngle += pct * 360;
+      const g = validParts.length > 1 ? Math.min(3.5, len * 0.15) : 0;
+      return {
+        ...p,
+        angle,
+        dash: Math.max(0, len - g),
+      };
+    });
 
     return (
       <div key={`adm-${page}`} className="admin-page-anim">
@@ -206,30 +221,22 @@ export default function AdminView() {
               <div className="dwrap">
                 <svg viewBox="0 0 180 180" className="donut" role="img" aria-label="Distribuição dos cavaletes">
                   <circle r={donutR} cx="90" cy="90" fill="none" stroke="var(--surface-2)" strokeWidth="22" />
-                  {parts
-                    .filter(p => p.v > 0)
-                    .map(p => {
-                      const len = (p.v / FROTA) * donutC;
-                      const g = Math.min(4, len * 0.4);
-                      const currentOff = off;
-                      off += len;
-                      return (
-                        <circle
-                          key={p.l}
-                          r={donutR}
-                          cx="90"
-                          cy="90"
-                          fill="none"
-                          stroke={p.col}
-                          strokeWidth="22"
-                          strokeDasharray={`${Math.max(0, len - g)} ${donutC}`}
-                          strokeDashoffset={-currentOff}
-                          transform="rotate(-90 90 90)"
-                        >
-                          <title>{p.l}: {fmtN(p.v)}</title>
-                        </circle>
-                      );
-                    })}
+                  {slices.map(s => (
+                    <circle
+                      key={s.l}
+                      r={donutR}
+                      cx="90"
+                      cy="90"
+                      fill="none"
+                      stroke={s.col}
+                      strokeWidth="22"
+                      strokeDasharray={`${s.dash.toFixed(2)} ${donutC.toFixed(2)}`}
+                      strokeDashoffset="0"
+                      transform={`rotate(${(s.angle - 90).toFixed(2)} 90 90)`}
+                    >
+                      <title>{s.l}: {fmtN(s.v)} ({Math.round((s.v / FROTA) * 100)}%)</title>
+                    </circle>
+                  ))}
                   <text x="90" y="86" textAnchor="middle" className="dn-v">{fmtN(FROTA)}</text>
                   <text x="90" y="106" textAnchor="middle" className="dn-l">cavaletes</text>
                 </svg>
@@ -406,12 +413,16 @@ export default function AdminView() {
                       key={e.emp}
                       className="click"
                       onClick={() => {
-                        setPageState('obras');
-                        setOg('empresa');
-                        setOgSel(e.emp);
-                        setFiltro('todas');
-                        setQ('');
-                        setObraId(null);
+                        if (openEmpresa) {
+                          openEmpresa(e.emp);
+                        } else {
+                          setPageState('obras');
+                          setOg('empresa');
+                          setOgSel(e.emp);
+                          setFiltro('todas');
+                          setQ('');
+                          setObraId(null);
+                        }
                         window.scrollTo(0, 0);
                       }}
                     >
@@ -684,9 +695,9 @@ export default function AdminView() {
     const all = atividade(obras, movs, pedidos, currentUser, lembretes, auto).filter(
       e => !r0 || (e.d >= r0 && e.d <= r1)
     );
-    const f = af || 'todos';
+    const f = af === 'sis' ? 'todos' : af || 'todos';
     const qn = norm((aq || '').trim());
-    const L0 = f === 'todos' ? all : all.filter(e => e.g === f || (f === 'esc' && e.g === 'sis'));
+    const L0 = f === 'todos' ? all : all.filter(e => e.g === f);
     const L = qn ? L0.filter(e => norm([e.quem, e.papel, e.titulo, e.desc, e.guia || '', e.obra].join(' ')).includes(qn)) : L0;
     const shown = L.slice(0, alim);
 
@@ -709,7 +720,6 @@ export default function AdminView() {
               ['esc', 'Escritório', 'monitor'],
               ['mot', 'Motoristas', 'truck'],
               ['cli', 'Clientes', 'user'],
-              ['sis', 'Sistema', 'mail'],
             ].map(([k, l, i]) => (
               <button
                 key={k}

@@ -45,7 +45,7 @@ export const FABRICA = { nome: 'Vidraria Mortágua', lat: 40.397, lon: -8.232 };
 
 export const IMG = {
   logo: '/dashboard/imagens/logo.png',
-  logoDk: '/dashboard/imagens/logo-escuro.png',
+  logoDk: '/dashboard/imagens/logo.png',
   markW: '/dashboard/imagens/marca-branca.png',
   favicon: '/dashboard/imagens/favicon.png',
 };

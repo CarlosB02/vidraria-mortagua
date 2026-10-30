@@ -225,7 +225,7 @@ export default function MotoristaView() {
 
         <button
           type="button"
-          className="btn btn-ok btn-xl btn-block"
+          className="btn btn-ok btn-block"
           disabled={totalCount === 0}
           onClick={() => {
             if (!m) return;
@@ -302,7 +302,7 @@ export default function MotoristaView() {
 
         <button
           type="button"
-          className="btn btn-ok btn-xl btn-block"
+          className="btn btn-ok btn-block"
           onClick={() => {
             motoristaConfirmarRecolha({
               obraId: mot.rec.obraId,
@@ -343,7 +343,7 @@ export default function MotoristaView() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-primary btn-xl btn-block"
+                  className="btn btn-primary btn-block"
                   onClick={() => {
                     let nums = m.nums;
                     if (!nums || !nums.length) {
@@ -450,7 +450,7 @@ export default function MotoristaView() {
                 </div>
                 <button
                   type="button"
-                  className="btn btn-primary btn-xl btn-block"
+                  className="btn btn-primary btn-block"
                   onClick={() => {
                     const r = o ? resumo(o, movs) : { total: p.qtd };
                     setMot(prev => ({
