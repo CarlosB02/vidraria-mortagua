@@ -287,13 +287,23 @@ export function clientesStats(obras, movs) {
     .sort((a, b) => b.avg - a.avg || b.late - a.late);
 }
 
+export function cleanPerson(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/^Assinado por\s*/i, '')
+    .replace(/^(Sr[aª]?\.?|Sr\.?ª?|D\.)\s*/i, '')
+    .replace(/^[ªº.]\s*/, '')
+    .trim();
+}
+
 export function atividade(
   obras,
   movs,
   pedidos,
   currentUser = 'Cristiana',
   lembretes = {},
-  auto = { d30: true, d0: true }
+  auto = { d30: true, d0: true },
+  acoesExtra = []
 ) {
   const ev = [];
   const hr = (id, base, span) => {
@@ -311,13 +321,13 @@ export function atividade(
     const obra = `${o.nome} · ${o.cidade}`;
     if (m.tipo === 'entrega') {
       ev0({
-        d: m.data,
-        mi: hr(m.id + 'a', 8, 2),
-        quem: porDe(m),
+        d: m.dataCriacao || (m.nova ? TODAY : (m.data > TODAY ? TODAY : m.data)),
+        mi: m.miCriacao || hr(m.id + 'a', 8, 2),
+        quem: cleanPerson(porDe(m)),
         papel: 'Escritório',
         g: 'esc',
         titulo: 'Registo de nova entrega',
-        desc: `Guia ${m.guia} de ${m.qtd} cavaletes para ${esc(o.nome)}. Enviada ao motorista Sr. ${esc(m.motorista)}.`,
+        desc: `Guia ${m.guia} de ${m.qtd} cavaletes para ${esc(o.nome)}. Enviada ao motorista ${cleanPerson(m.motorista)}${m.data > TODAY ? ` para ${fd(m.data)}` : ''}.`,
         guia: m.guia,
         obra,
         q: m.qtd,
@@ -325,9 +335,9 @@ export function atividade(
       if (m.qtdMot != null) {
         const d = m.qtdMot - m.qtd;
         ev0({
-          d: m.data,
-          mi: hr(m.id + 'b', 10, 2),
-          quem: 'Sr. ' + m.motorista,
+          d: m.dataMot || (m.nova ? TODAY : m.data),
+          mi: m.miMot || hr(m.id + 'b', 10, 2),
+          quem: cleanPerson(m.motorista),
           papel: 'Motorista',
           g: 'mot',
           titulo: 'Confirmação de carga',
@@ -340,9 +350,9 @@ export function atividade(
       if (m.assinatura) {
         const dif = m.estado === 'divergencia';
         ev0({
-          d: m.data,
-          mi: hr(m.id + 'c', 13, 4),
-          quem: m.assinatura,
+          d: m.dataCli || (m.nova ? TODAY : m.data),
+          mi: m.miCli || hr(m.id + 'c', 13, 4),
+          quem: cleanPerson(m.assinatura),
           papel: o.empresa,
           g: 'cli',
           titulo: dif ? 'Receção assinada com diferença' : 'Receção assinada',
@@ -353,28 +363,43 @@ export function atividade(
         });
       }
     } else {
-      if (m.estado === 'concluida') {
+      if (m.por && m.dataCriacao) {
         ev0({
-          d: m.data,
-          mi: hr(m.id + 'd', 10, 6),
-          quem: 'Sr. ' + m.motorista,
-          papel: 'Motorista',
-          g: 'mot',
-          titulo: 'Recolha registada',
-          desc: `Recolheu ${m.qtd} cavaletes na obra.`,
+          d: m.dataCriacao,
+          mi: m.miCriacao || hr(m.id + 'g', 11, 2),
+          quem: cleanPerson(m.por),
+          papel: 'Escritório',
+          g: 'esc',
+          titulo: 'Recolha direta no escritório',
+          desc: `Recolha de ${m.qtd} cavaletes registada com guia ${m.guia}.`,
           guia: m.guia,
           obra,
           q: m.qtd,
         });
-      } else if (m.motorista) {
+      }
+      if (m.dataAtrib || (m.motorista && m.estado !== 'concluida')) {
         ev0({
-          d: m.data,
-          mi: hr(m.id + 'e', 8, 2),
-          quem: porDe(m),
+          d: m.dataAtrib || (m.data > TODAY ? TODAY : m.data),
+          mi: m.miAtrib || hr(m.id + 'e', 8, 2),
+          quem: cleanPerson(m.porAtrib || porDe(m)),
           papel: 'Escritório',
           g: 'esc',
           titulo: 'Recolha marcada',
-          desc: `Recolha de ${m.qtd} cavaletes atribuída ao Sr. ${esc(m.motorista)} para ${fd(m.data)}.`,
+          desc: `Recolha de ${m.qtd} cavaletes atribuída ao motorista ${cleanPerson(m.motorista)} para ${fd(m.data)}.`,
+          guia: m.guia,
+          obra,
+          q: m.qtd,
+        });
+      }
+      if (m.estado === 'concluida') {
+        ev0({
+          d: m.dataRecolha || (m.data > TODAY ? TODAY : m.data),
+          mi: m.miRecolha || hr(m.id + 'd', 10, 6),
+          quem: cleanPerson(m.motorista),
+          papel: 'Motorista',
+          g: 'mot',
+          titulo: 'Recolha registada',
+          desc: `Recolheu ${m.qtd} cavaletes na obra.`,
           guia: m.guia,
           obra,
           q: m.qtd,
@@ -390,8 +415,8 @@ export function atividade(
     const R = m.resolvido;
     ev0({
       d: R.d,
-      mi: hr(m.id + 'r', 9, 8),
-      quem: R.por || currentUser,
+      mi: R.mi || hr(m.id + 'r', 9, 8),
+      quem: cleanPerson(R.por || currentUser),
       papel: 'Escritório',
       g: 'esc',
       titulo: 'Diferença resolvida',
@@ -410,7 +435,7 @@ export function atividade(
       ev0({
         d: lembretes[o.id],
         mi: hr(o.id + 'm', 9, 8),
-        quem: LEMB_POR[o.id] || currentUser,
+        quem: cleanPerson(LEMB_POR[o.id] || currentUser),
         papel: 'Escritório',
         g: 'esc',
         titulo: 'Email enviado ao cliente',
@@ -426,8 +451,8 @@ export function atividade(
     if (cr) {
       ev0({
         d: cr.d,
-        mi: first && !o.criada ? hr(first.id + 'a', 8, 2) - 5 : hr(o.id + 'c', 8, 8),
-        quem: cr.por,
+        mi: cr.mi || (first && !o.criada ? hr(first.id + 'a', 8, 2) - 5 : hr(o.id + 'c', 8, 8)),
+        quem: cleanPerson(cr.por),
         papel: 'Escritório',
         g: 'esc',
         titulo: 'Obra nova criada',
@@ -445,8 +470,8 @@ export function atividade(
       if (o) {
         ev0({
           d: p.logDe,
-          mi: hr(p.id + 'l', 9, 6),
-          quem: p.logPor || porDe({ id: 'm' + p.id.slice(1), nova: false }),
+          mi: p.miLog || hr(p.id + 'l', 9, 6),
+          quem: cleanPerson(p.logPor || porDe({ id: 'm' + p.id.slice(1), nova: false })),
           papel: 'Escritório',
           g: 'esc',
           titulo: 'Folha de recolha enviada para a logística',
@@ -461,8 +486,8 @@ export function atividade(
     if (!o) return;
     ev0({
       d: p.data,
-      mi: hr(p.id + 'f', 14, 4),
-      quem: o.contacto,
+      mi: p.mi || hr(p.id + 'f', 14, 4),
+      quem: cleanPerson(p.quem || (o.contacto && o.contacto !== '—' ? o.contacto : o.empresa)),
       papel: o.empresa,
       g: 'cli',
       titulo: 'Pedido de recolha',
@@ -472,6 +497,8 @@ export function atividade(
       q: p.qtd,
     });
   });
+
+  (acoesExtra || []).forEach(a => ev0(a));
 
   return ev.filter(e => e.d <= TODAY).sort((a, b) => b.d - a.d || b.mi - a.mi);
 }

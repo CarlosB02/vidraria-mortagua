@@ -31,6 +31,7 @@ import {
   resLists,
   tipoDe,
   parseIso,
+  cleanPerson,
 } from '../data/logic';
 import MapaPortugal from './MapaPortugal';
 import EscritorioView from './EscritorioView';
@@ -66,6 +67,7 @@ export default function AdminView() {
     toggleAcesso,
     openModal,
     currentUser,
+    acoesExtra,
   } = useDashboard();
 
   const [ar, setAr] = useState({ k: '30', open: false, m: null, de: null, ate: null });
@@ -515,7 +517,7 @@ export default function AdminView() {
           </div>
         </div>
 
-        <div className="grid2" style={{ marginTop: '18px' }}>
+        <div className="grid2 fin-grid" style={{ marginTop: '18px' }}>
           <section className="card fin-hl">
             <div className="card-h">
               <h2>Cobrança por atraso</h2>
@@ -692,7 +694,7 @@ export default function AdminView() {
     };
 
     const [r0, r1, rl] = arRange();
-    const all = atividade(obras, movs, pedidos, currentUser, lembretes, auto).filter(
+    const all = atividade(obras, movs, pedidos, currentUser, lembretes, auto, acoesExtra).filter(
       e => !r0 || (e.d >= r0 && e.d <= r1)
     );
     const f = af === 'sis' ? 'todos' : af || 'todos';
@@ -805,7 +807,10 @@ export default function AdminView() {
                       <span className="atl-dot" />
                       <article className="atl-c">
                         <header>
-                          <span className="atl-tag">{e.quem} ({e.papel})</span>
+                          <span className="atl-tag">
+                            {cleanPerson(e.quem)}
+                            {e.g === 'cli' && e.papel ? ` (${e.papel})` : ''}
+                          </span>
                           <b>{e.titulo}</b>
                           <time dateTime={`${isoD(e.d)}T${hh}:${mm}`}>
                             <Icon name="clock" />

@@ -32,7 +32,7 @@ export function DashboardProvider({ children }) {
 
   // Inicialização determinística de dados
   const [data, setData] = useState(() => generateSeedData());
-  const { obras, movs, pedidos, lembretes } = data;
+  const { obras, movs, pedidos, lembretes, acoesExtra = [] } = data;
 
   // Estado geral
   const [view, setViewState] = useState('escritorio');
@@ -199,6 +199,7 @@ export function DashboardProvider({ children }) {
         contacto: novaObraData.contacto.trim() || '—',
         email: novaObraData.email.trim() || '—',
         tel: novaObraData.tel.trim() || '—',
+        criada: { d: TODAY, mi: (new Date().getHours() * 60 + new Date().getMinutes()), por: currentUser },
       };
       nextObras.push(nova);
       finalObraId = novaId;
@@ -213,6 +214,8 @@ export function DashboardProvider({ children }) {
       obraId: finalObraId,
       tipo: 'entrega',
       data: dEnv,
+      dataCriacao: TODAY,
+      miCriacao: (new Date().getHours() * 60 + new Date().getMinutes()),
       qtd: nums.length,
       nums: [...nums],
       qtdMot: null,
@@ -247,6 +250,8 @@ export function DashboardProvider({ children }) {
       obraId: targetObraId,
       tipo: 'recolha',
       data: TODAY,
+      dataCriacao: TODAY,
+      miCriacao: (new Date().getHours() * 60 + new Date().getMinutes()),
       qtd: qty,
       motorista: 'Joaquim Duarte',
       estado: 'concluida',
@@ -302,7 +307,7 @@ export function DashboardProvider({ children }) {
         movs: nextMovs,
         pedidos: prev.pedidos.map(p =>
           p.id === pedidoId
-            ? { ...p, estado: 'logistica', movId: movIdToSet, guia: p.guia || guia, logDe: TODAY, logPor: currentUser }
+            ? { ...p, estado: 'logistica', movId: movIdToSet, guia: p.guia || guia, logDe: TODAY, miLog: (new Date().getHours() * 60 + new Date().getMinutes()), logPor: currentUser }
             : p
         ),
       };
@@ -324,7 +329,7 @@ export function DashboardProvider({ children }) {
       return {
         ...prev,
         movs: prev.movs.map(m =>
-          m.id === movId ? { ...m, motorista, data: dRec, estado: 'agendada' } : m
+          m.id === movId ? { ...m, motorista, data: dRec, dataAtrib: TODAY, miAtrib: (new Date().getHours() * 60 + new Date().getMinutes()), porAtrib: currentUser, estado: 'agendada' } : m
         ),
         pedidos: prev.pedidos.map(p =>
           p.movId === movId || (pid && p.id === pid)
@@ -348,6 +353,7 @@ export function DashboardProvider({ children }) {
       const chosenList = (pickOption === 'A' ? X.V : X.C).slice();
       const resolvido = {
         d: TODAY,
+        mi: (new Date().getHours() * 60 + new Date().getMinutes()),
         por: currentUser,
         q: chosenList.length,
         volta: pickOption === 'B' ? X.falta.length : 0,
@@ -389,6 +395,8 @@ export function DashboardProvider({ children }) {
         ...mov,
         numsMot: [...numsMot],
         qtdMot: numsMot.length,
+        dataMot: TODAY,
+        miMot: (new Date().getHours() * 60 + new Date().getMinutes()),
         estado: 'em_viagem',
       };
 
@@ -440,7 +448,7 @@ export function DashboardProvider({ children }) {
 
       if (mv) {
         nextMovs = nextMovs.map(m =>
-          m.id === mv.id ? { ...m, data: TODAY, qtd: qty, estado: 'concluida', motorista: motoristaNome } : m
+          m.id === mv.id ? { ...m, data: TODAY, dataRecolha: TODAY, miRecolha: (new Date().getHours() * 60 + new Date().getMinutes()), qtd: qty, estado: 'concluida', motorista: motoristaNome } : m
         );
       } else {
         const newMov = {
@@ -448,6 +456,8 @@ export function DashboardProvider({ children }) {
           obraId: rObraId,
           tipo: 'recolha',
           data: TODAY,
+          dataRecolha: TODAY,
+          miRecolha: (new Date().getHours() * 60 + new Date().getMinutes()),
           qtd: qty,
           motorista: motoristaNome,
           estado: 'concluida',
@@ -492,6 +502,8 @@ export function DashboardProvider({ children }) {
             numsCli: [...numsCli],
             qtdCli: numsCli.length,
             assinatura: nome,
+            dataCli: TODAY,
+            miCli: (new Date().getHours() * 60 + new Date().getMinutes()),
             notaCli: nota || '',
             estado: ok ? 'entregue' : 'divergencia',
           };
@@ -548,6 +560,7 @@ export function DashboardProvider({ children }) {
       obraId: targetObraId,
       qtd: qty,
       data: TODAY,
+      mi: (new Date().getHours() * 60 + new Date().getMinutes()),
       estado: 'pendente',
       guia: newGuia,
       movId: newMovId,
@@ -590,13 +603,31 @@ export function DashboardProvider({ children }) {
     } else {
       setStaffList(prev => [...prev, { nome, papel, tel, ativo: true }]);
     }
+    setData(prev => ({
+      ...prev,
+      acoesExtra: [
+        ...(prev.acoesExtra || []),
+        {
+          d: TODAY,
+          mi: (new Date().getHours() * 60 + new Date().getMinutes()),
+          quem: currentUser,
+          papel: 'Escritório',
+          g: 'esc',
+          titulo: papel === 'Motorista' ? 'Motorista adicionado' : 'Utilizador adicionado',
+          desc: `${nome} (${papel}) registado com o contacto ${tel || '—'}.`,
+          guia: null,
+          obra: 'Geral',
+          q: 0,
+        },
+      ],
+    }));
     closeModal();
     showToast(
       papel === 'Motorista'
         ? `${nome} já aparece na lista de motoristas.`
         : `${nome} adicionado. Recebe o acesso por SMS.`
     );
-  }, [closeModal, showToast]);
+  }, [closeModal, showToast, currentUser]);
 
   // Alternar acesso (Admin)
   const toggleAcesso = useCallback((id) => {
@@ -621,6 +652,7 @@ export function DashboardProvider({ children }) {
     movs,
     pedidos,
     lembretes,
+    acoesExtra,
     // Navegação e vista
     view,
     setViewState,
