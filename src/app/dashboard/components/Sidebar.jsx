@@ -14,6 +14,7 @@ export default function Sidebar() {
     setObraId,
     setEmp,
     setEmpFrom,
+    setOriginPage,
     setFiltro,
     setQ,
     setOgSel,
@@ -26,7 +27,7 @@ export default function Sidebar() {
 
   const t = totals(obras, movs);
   const div = movs.filter(m => m.estado === 'divergencia').length;
-  const ped = pedidos.filter(p => p.estado === 'pendente').length;
+  const ped = pedidos.filter(p => p.estado === 'pendente' || p.estado === 'logistica').length;
   const totalAlertas = t.lateObras + div + ped;
 
   const navEscritorio = [
@@ -55,6 +56,7 @@ export default function Sidebar() {
     setObraId(null);
     if (setEmp) setEmp(null);
     if (setEmpFrom) setEmpFrom(null);
+    if (setOriginPage) setOriginPage(null);
     setMlim(10);
     if (targetPage === 'obras') {
       setFiltro('todas');
@@ -71,6 +73,7 @@ export default function Sidebar() {
     setObraId(null);
     if (setEmp) setEmp(null);
     if (setEmpFrom) setEmpFrom(null);
+    if (setOriginPage) setOriginPage(null);
     window.scrollTo(0, 0);
     const mainEl = document.getElementById('main');
     if (mainEl) mainEl.scrollTop = 0;

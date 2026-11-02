@@ -12,6 +12,7 @@ import {
   TIPOS_CAV,
   isoD,
   addDays,
+  addMonths,
 } from '../data/constants';
 import {
   inventario,
@@ -95,14 +96,16 @@ export default function ModalLayer() {
         body: tpl.body,
       });
     } else if (modal.type === 'atrib') {
-      const m = movs.find(x => x.id === modal.movId);
+      const p = modal.pid ? pedidos.find(x => x.id === modal.pid) : null;
+      const mId = modal.movId || p?.movId;
+      const m = movs.find(x => x.id === mId);
       let d = new Date(TODAY);
       do {
         d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
       } while (d.getDay() === 0 || d.getDay() === 6);
 
       setAtribState({
-        movId: modal.movId,
+        movId: mId,
         date: m && m.estado === 'agendada' ? isoD(m.data) : isoD(d),
         calOpen: false,
         calM: null,
@@ -112,7 +115,7 @@ export default function ModalLayer() {
         err: '',
       });
     }
-  }, [modal, obras, movs]);
+  }, [modal, obras, movs, pedidos]);
 
   // Ajuste do scale da folha A4 no preview
   useEffect(() => {
@@ -125,6 +128,13 @@ export default function ModalLayer() {
       w.style.height = `${561 * k}px`;
     }
   }, [modal]);
+
+  useEffect(() => {
+    return () => {
+      const el = document.getElementById('print-area');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    };
+  }, []);
 
   if (!modal) return null;
 
@@ -141,10 +151,23 @@ export default function ModalLayer() {
         <div class="fs-cut"><span>✂</span></div>
         ${renderFolhaViaHtml(p, rec, 'Via da Vidraria Mortágua', obras, movs)}
       </div>`;
+
+    const removePrintArea = () => {
+      const el = document.getElementById('print-area');
+      if (el) {
+        el.innerHTML = '';
+        if (el.parentNode) el.parentNode.removeChild(el);
+      }
+      window.removeEventListener('afterprint', removePrintArea);
+    };
+
+    window.addEventListener('afterprint', removePrintArea, { once: true });
+
     try {
       window.print();
     } catch {
       showToast('A impressão não está disponível nesta janela.');
+      removePrintArea();
     }
   };
 
@@ -1044,12 +1067,40 @@ export default function ModalLayer() {
                           </>
                         ) : (
                           <>
-                            <dt>Cavaletes recolhidos</dt><dd>{m.qtd}</dd>
+                            <dt>{m.estado === 'concluida' ? 'Cavaletes recolhidos' : 'Cavaletes a recolher'}</dt><dd>{m.qtd}</dd>
+                            <dt>Estado</dt>
+                            <dd>
+                              {m.estado === 'concluida'
+                                ? 'Concluída'
+                                : m.estado === 'agendada'
+                                ? 'Agendada'
+                                : m.estado === 'por_atribuir'
+                                ? 'Na logística (por atribuir)'
+                                : 'Pedido pendente'}
+                            </dd>
                           </>
                         )}
                       </dl>
                     </div>
                     <div className="mf">
+                      {m.tipo === 'recolha' && m.estado === 'pendente' && m.pid && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => openModal({ type: 'mrec', pid: m.pid })}
+                        >
+                          <Icon name="cal" />Marcar recolha
+                        </button>
+                      )}
+                      {m.tipo === 'recolha' && m.estado === 'por_atribuir' && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => openModal({ type: 'atrib', movId: m.id, pid: m.pid })}
+                        >
+                          <Icon name="truck" />Atribuir motorista
+                        </button>
+                      )}
                       {m.estado === 'divergencia' && (
                         <button
                           type="button"

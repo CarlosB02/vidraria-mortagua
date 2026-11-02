@@ -688,6 +688,17 @@ export function generateSeedData() {
       motorista: 'Joaquim Duarte',
       estado: 'concluida',
     },
+    {
+      id: nm(),
+      obraId: 'o3',
+      guia: 'GR-2026/1297',
+      tipo: 'recolha',
+      data: TODAY,
+      qtd: 20,
+      motorista: null,
+      estado: 'pendente',
+      pid: 'p1',
+    },
 
     // o4 · Moradia Quinta do Sobral
     {
@@ -2182,6 +2193,7 @@ export function generateSeedData() {
   ];
 
   // Pedidos de recolha (Secção 11.2)
+  const movP1 = movs.find(m => m.guia === 'GR-2026/1297');
   const movP0 = movs.find(m => m.guia === 'GR-2026/1277');
   const movP3 = movs.find(m => m.guia === 'GR-2026/1291');
   const movP4 = movs.find(m => m.guia === 'GR-2026/1293');
@@ -2194,6 +2206,8 @@ export function generateSeedData() {
       qtd: 20,
       data: TODAY,
       estado: 'pendente',
+      guia: 'GR-2026/1297',
+      movId: movP1?.id,
     },
     {
       id: 'p0',

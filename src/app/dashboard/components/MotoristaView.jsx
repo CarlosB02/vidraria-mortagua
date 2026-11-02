@@ -28,6 +28,7 @@ export default function MotoristaView() {
     obras,
     movs,
     pedidos,
+    motoristasList,
     motoristaConfirmarCarga,
     motoristaConfirmarRecolha,
     setViewState,
@@ -46,6 +47,13 @@ export default function MotoristaView() {
   const minhas = todas.filter(m => m.data <= TODAY);
   const futE = todas.filter(m => m.data > TODAY);
   const viagem = movs.filter(m => m.tipo === 'entrega' && m.estado === 'em_viagem' && m.motorista === mot.nome);
+
+  const ag = pedidos
+    .filter(p => p.estado === 'agendado' && (!p.mot || p.mot === mot.nome))
+    .sort((a, b) => (a.dataRec || '').localeCompare(b.dataRec || ''));
+  const tdIso = isoD(TODAY);
+  const ps = ag.filter(p => (p.dataRec || '') <= tdIso);
+  const futR = ag.filter(p => (p.dataRec || '') > tdIso);
 
   const DS = ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'];
 
@@ -421,13 +429,6 @@ export default function MotoristaView() {
     );
   } else {
     // Separador "recolher"
-    const ag = pedidos
-      .filter(p => p.estado === 'agendado' && (!p.mot || p.mot === mot.nome))
-      .sort((a, b) => (a.dataRec || '').localeCompare(b.dataRec || ''));
-    const tdIso = isoD(TODAY);
-    const ps = ag.filter(p => (p.dataRec || '') <= tdIso);
-    const futR = ag.filter(p => (p.dataRec || '') > tdIso);
-
     screenContent = (
       <>
         <p className="eyebrow">Recolhas de hoje</p>
@@ -475,7 +476,20 @@ export default function MotoristaView() {
                 const o = obras.find(x => x.id === p.obraId);
                 const d = parseIso(p.dataRec);
                 return (
-                  <div key={p.id} className="fitem">
+                  <div
+                    key={p.id}
+                    className="fitem"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      const r = o ? resumo(o, movs) : { total: p.qtd };
+                      setMot(prev => ({
+                        ...prev,
+                        rec: { obraId: o.id, pid: p.id },
+                        qty: Math.min(p.qtd, r.total),
+                      }));
+                    }}
+                    title="Clique para antecipar e registar recolha"
+                  >
                     <span className="fdate">
                       <small>{DS[d.getDay()]}</small>
                       <b>{d.getDate()}</b>
@@ -545,6 +559,27 @@ export default function MotoristaView() {
                 </button>
               ))}
             </div>
+
+            <div className="row" style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
+              <b>Trocar de motorista</b>
+            </div>
+            <div className="szs" style={{ flexDirection: 'column', gap: '6px' }}>
+              {(motoristasList || []).map(nome => (
+                <button
+                  key={nome}
+                  type="button"
+                  aria-pressed={mot.nome === nome}
+                  onClick={() => {
+                    setMot(m => ({ ...m, nome, conf: null, rec: null, done: null }));
+                    setPsOpen(false);
+                  }}
+                  style={{ justifyContent: 'flex-start', padding: '8px 12px', width: '100%' }}
+                >
+                  <Icon name="truck" />
+                  <span>Sr. {nome}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -561,6 +596,7 @@ export default function MotoristaView() {
           onClick={() => setMot(m => ({ ...m, tab: 'levar', conf: null, rec: null, done: null }))}
         >
           <Icon name="truck" />Entrega
+          {(minhas.length + viagem.length) > 0 && <span className="ptab-badge">{minhas.length + viagem.length}</span>}
         </button>
         <button
           type="button"
@@ -568,6 +604,7 @@ export default function MotoristaView() {
           onClick={() => setMot(m => ({ ...m, tab: 'recolher', conf: null, rec: null, done: null }))}
         >
           <Icon name="recolha" />Recolher
+          {ag.length > 0 && <span className="ptab-badge">{ag.length}</span>}
         </button>
       </div>
     </>

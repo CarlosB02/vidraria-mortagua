@@ -238,12 +238,22 @@ export default function ClienteView() {
         <div className="pcard" style={{ textAlign: 'center' }}>
           <p className="eyebrow">Entrega {m.guia}</p>
           <p>A Vidraria Mortágua enviou-lhe</p>
-          <div className="qty" style={{ justifyContent: 'center' }}>
-            <span className="num" style={{ fontSize: '2.6em' }}>{X.MO.length}</span>
-            <span style={{ textAlign: 'left', fontWeight: 600 }}>cavaletes</span>
+          <div
+            className="qty"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              margin: '4px 0',
+            }}
+          >
+            <span className="num" style={{ fontSize: '2.6em', lineHeight: 1 }}>{X.MO.length}</span>
+            <span style={{ fontWeight: 600 }}>cavaletes</span>
             <button
               type="button"
               className="infobtn"
+              style={{ margin: 0 }}
               aria-label="Ver os números dos cavaletes"
               onClick={() => openModal({ type: 'cavnums', movId: m.id, cli: true })}
             >
@@ -523,9 +533,16 @@ export default function ClienteView() {
     const cam = L.reduce((n, z) => n + z.r.transito, 0);
     const prox = allLots.filter(l => l.dias >= 0).sort((a, b) => a.dias - b.dias)[0];
 
+    const getMovTime = d => {
+      if (!d) return 0;
+      if (d instanceof Date) return d.getTime();
+      const dt = typeof d === 'string' ? new Date(d) : new Date(d);
+      return dt && !isNaN(dt.getTime()) ? dt.getTime() : 0;
+    };
+
     const recent = movs
-      .filter(m => ids.has(m.obraId) && (m.tipo === 'entrega' ? m.estado === 'entregue' || m.estado === 'divergencia' : m.estado === 'concluida'))
-      .sort((a, b) => b.data - a.data)
+      .filter(m => ids.has(m.obraId) && (m.tipo === 'entrega' ? m.estado === 'entregue' || m.estado === 'divergencia' : true))
+      .sort((a, b) => getMovTime(b.data) - getMovTime(a.data))
       .slice(0, 3);
 
     const inv = inventario(obras, movs);
@@ -690,6 +707,13 @@ export default function ClienteView() {
               {recent.map(m => {
                 const ob = obras.find(x => x.id === m.obraId);
                 const isE = m.tipo === 'entrega';
+                const recStatusText = m.estado === 'concluida'
+                  ? ' · concluída'
+                  : m.estado === 'agendada'
+                  ? ' · agendada'
+                  : m.estado === 'por_atribuir'
+                  ? ' · em processamento'
+                  : ' · pedido pendente';
                 return (
                   <div key={m.id} className="fitem">
                     <span className={`cd-mi ${isE ? 'e' : 'r'}`}>
@@ -697,7 +721,7 @@ export default function ClienteView() {
                     </span>
                     <div className="ft">
                       <b>{isE ? 'Entrega' : 'Recolha'} de {isE ? qEntregue(m) : m.qtd} · {ob?.nome}</b>
-                      <span>{fd(m.data)}{isE && m.assinatura ? ' · assinado por ' + m.assinatura : ''}</span>
+                      <span>{fd(m.data)}{isE ? (m.assinatura ? ' · assinado por ' + m.assinatura : '') : recStatusText}</span>
                     </div>
                     {isE && (
                       <button

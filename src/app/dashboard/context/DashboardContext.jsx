@@ -40,50 +40,45 @@ export function DashboardProvider({ children }) {
   const [obraId, setObraId] = useState(null);
   const [emp, setEmp] = useState(null);
   const [empFrom, setEmpFrom] = useState(null);
+  const [originPage, setOriginPage] = useState(null);
   const [ohist, setOhist] = useState([]);
 
-  // Navegação com histórico (Ficha de Obra / Ficha de Empresa)
+  // Navegação: abrir Obra
   const openObra = useCallback((id) => {
-    setOhist(prev => [...prev, { page, obraId, emp, empFrom }]);
+    setOriginPage(prev => prev || page);
     setObraId(id);
     setEmp(null);
-    setPageState('obras');
     window.scrollTo(0, 0);
     const mainEl = document.getElementById('main');
     if (mainEl) mainEl.scrollTop = 0;
-  }, [page, obraId, emp, empFrom]);
+  }, [page]);
 
+  // Navegação: abrir Empresa
   const openEmpresa = useCallback((empName) => {
-    setOhist(prev => [...prev, { page, obraId, emp, empFrom }]);
+    setOriginPage(prev => prev || page);
     setEmp(empName);
-    setEmpFrom(obraId);
+    setEmpFrom(prevFrom => obraId || prevFrom);
     setObraId(null);
-    if (page !== 'clientes') {
-      setPageState('obras');
-    }
     window.scrollTo(0, 0);
     const mainEl = document.getElementById('main');
     if (mainEl) mainEl.scrollTop = 0;
-  }, [page, obraId, emp, empFrom]);
+  }, [page, obraId]);
 
+  // Voltar atrás: volta sempre diretamente à página por onde foi acedida (ex: clientes, obras, inicio)
   const goBack = useCallback(() => {
-    setOhist(prev => {
-      if (!prev.length) {
-        setObraId(null);
-        setEmp(null);
-        setEmpFrom(null);
-        return [];
-      }
-      const next = [...prev];
-      const last = next.pop();
-      setObraId(last.obraId || null);
-      setEmp(last.emp || null);
-      setEmpFrom(last.empFrom || null);
-      if (last.page) setPageState(last.page);
-      window.scrollTo(0, 0);
-      return next;
+    setOriginPage(prevOrigin => {
+      const target = prevOrigin || page || 'obras';
+      setPageState(target);
+      setObraId(null);
+      setEmp(null);
+      setEmpFrom(null);
+      return null;
     });
-  }, []);
+    setOhist([]);
+    window.scrollTo(0, 0);
+    const mainEl = document.getElementById('main');
+    if (mainEl) mainEl.scrollTop = 0;
+  }, [page]);
 
   // Filtros escritório
   const [filtro, setFiltro] = useState('todas');
@@ -272,49 +267,74 @@ export function DashboardProvider({ children }) {
     if (!pedido) return;
     const guia = pedido.guia || 'GR-2026/' + (1400 + pedidos.length + 1);
 
-    const newMov = {
-      id: 'm' + (movs.length + 100),
-      obraId: pedido.obraId,
-      tipo: 'recolha',
-      data: TODAY,
-      qtd: pedido.qtd,
-      motorista: null,
-      estado: 'por_atribuir',
-      guia,
-      pid: pedido.id,
-      por: currentUser,
-    };
+    setData(prev => {
+      const existingMov = pedido.movId
+        ? prev.movs.find(m => m.id === pedido.movId)
+        : prev.movs.find(m => m.pid === pedidoId);
+      let nextMovs = [...prev.movs];
 
-    setData(prev => ({
-      ...prev,
-      movs: [newMov, ...prev.movs],
-      pedidos: prev.pedidos.map(p =>
-        p.id === pedidoId
-          ? { ...p, estado: 'logistica', movId: newMov.id, guia, logDe: TODAY, logPor: currentUser }
-          : p
-      ),
-    }));
+      if (existingMov) {
+        nextMovs = nextMovs.map(m =>
+          m.id === existingMov.id
+            ? { ...m, estado: 'por_atribuir', guia: m.guia || guia, por: currentUser }
+            : m
+        );
+      } else {
+        const newMov = {
+          id: 'm' + (prev.movs.length + 100),
+          obraId: pedido.obraId,
+          tipo: 'recolha',
+          data: TODAY,
+          qtd: pedido.qtd,
+          motorista: null,
+          estado: 'por_atribuir',
+          guia,
+          pid: pedido.id,
+          por: currentUser,
+        };
+        nextMovs = [newMov, ...nextMovs];
+      }
+
+      const movIdToSet = existingMov ? existingMov.id : nextMovs[0].id;
+
+      return {
+        ...prev,
+        movs: nextMovs,
+        pedidos: prev.pedidos.map(p =>
+          p.id === pedidoId
+            ? { ...p, estado: 'logistica', movId: movIdToSet, guia: p.guia || guia, logDe: TODAY, logPor: currentUser }
+            : p
+        ),
+      };
+    });
 
     closeModal();
     showToast('Folha enviada para a logística. Falta atribuir o motorista em Movimentos.');
-  }, [pedidos, movs, currentUser, closeModal, showToast]);
+  }, [pedidos, currentUser, closeModal, showToast]);
 
   // TODO: API - Atribuir motorista e data a recolha da logística
   const atribuirMotoristaRecolha = useCallback(({ movId, motorista, date }) => {
     const dd = (date || '').split('-').map(Number);
     const dRec = dd.length === 3 && dd[0] ? new Date(dd[0], dd[1] - 1, dd[2]) : TODAY;
 
-    setData(prev => ({
-      ...prev,
-      movs: prev.movs.map(m =>
-        m.id === movId ? { ...m, motorista, data: dRec, estado: 'agendada' } : m
-      ),
-      pedidos: prev.pedidos.map(p =>
-        p.movId === movId ? { ...p, estado: 'agendado', dataRec: date, mot: motorista } : p
-      ),
-    }));
+    setData(prev => {
+      const targetMov = prev.movs.find(m => m.id === movId);
+      const pid = targetMov?.pid;
 
-    setMot(m => ({ ...m, nome: motorista }));
+      return {
+        ...prev,
+        movs: prev.movs.map(m =>
+          m.id === movId ? { ...m, motorista, data: dRec, estado: 'agendada' } : m
+        ),
+        pedidos: prev.pedidos.map(p =>
+          p.movId === movId || (pid && p.id === pid)
+            ? { ...p, estado: 'agendado', dataRec: date, mot: motorista }
+            : p
+        ),
+      };
+    });
+
+    setMot(m => ({ ...m, nome: motorista, tab: 'recolher', conf: null, rec: null, done: null }));
     closeModal();
     showToast(`Recolha enviada ao telemóvel do Sr. ${motorista.split(' ')[0]}.`);
   }, [closeModal, showToast]);
@@ -411,7 +431,9 @@ export function DashboardProvider({ children }) {
   const motoristaConfirmarRecolha = useCallback(({ obraId: rObraId, pid, qty, motoristaNome }) => {
     setData(prev => {
       const pedido = pid ? prev.pedidos.find(p => p.id === pid) : null;
-      const mv = pedido && pedido.movId ? prev.movs.find(m => m.id === pedido.movId) : null;
+      const mv = pedido && pedido.movId
+        ? prev.movs.find(m => m.id === pedido.movId)
+        : (pid ? prev.movs.find(m => m.pid === pid) : null);
 
       let nextMovs = [...prev.movs];
       let nextPedidos = [...prev.pedidos];
@@ -503,16 +525,37 @@ export function DashboardProvider({ children }) {
 
   // TODO: API - Cliente pedir recolha
   const clientePedirRecolha = useCallback(({ obraId: targetObraId, qty }) => {
+    const nextPIndex = pedidos.length + 10;
+    const newPedidoId = 'p' + nextPIndex;
+    const newGuia = 'GR-2026/' + (1400 + pedidos.length + 1);
+    const newMovId = 'm' + (movs.length + 100);
+
+    const newMov = {
+      id: newMovId,
+      obraId: targetObraId,
+      tipo: 'recolha',
+      data: TODAY,
+      qtd: qty,
+      motorista: null,
+      estado: 'pendente',
+      guia: newGuia,
+      pid: newPedidoId,
+      por: 'Cliente',
+    };
+
     const newPedido = {
-      id: 'p' + (pedidos.length + 10),
+      id: newPedidoId,
       obraId: targetObraId,
       qtd: qty,
       data: TODAY,
       estado: 'pendente',
+      guia: newGuia,
+      movId: newMovId,
     };
 
     setData(prev => ({
       ...prev,
+      movs: [newMov, ...prev.movs],
       pedidos: [...prev.pedidos, newPedido],
     }));
 
@@ -524,7 +567,7 @@ export function DashboardProvider({ children }) {
         s: `A Vidraria Mortágua vai buscar ${qty} cavaletes e liga-lhe para combinar o dia.`,
       },
     }));
-  }, [pedidos.length]);
+  }, [pedidos.length, movs.length]);
 
   // TODO: API - Registar envio de email
   const enviarEmailLembrete = useCallback((targetObraId) => {
@@ -590,6 +633,8 @@ export function DashboardProvider({ children }) {
     empFrom,
     setEmpFrom,
     ohist,
+    originPage,
+    setOriginPage,
     openObra,
     openEmpresa,
     goBack,

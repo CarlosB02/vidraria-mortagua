@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Icon } from '../data/icons';
 import {
@@ -34,6 +34,24 @@ import {
   qEntregue,
 } from '../data/logic';
 import MapaPortugal from './MapaPortugal';
+
+export function cleanPerson(str) {
+  if (!str) return '';
+  return str
+    .replace(/^Assinado por\s*/i, '')
+    .replace(/^(Sr[aª]?\.?|Sr\.?ª?|D\.)\s*/i, '')
+    .replace(/^[ªº.]\s*/, '')
+    .trim();
+}
+
+function formatMovDate(d) {
+  if (!d) return '—';
+  const dt = d instanceof Date ? d : (typeof d === 'string' ? parseIso(d) : new Date(d));
+  if (!dt || isNaN(dt.getTime())) return String(d);
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+}
 
 export default function EscritorioView() {
   const {
@@ -82,11 +100,37 @@ export default function EscritorioView() {
   // Filtros locais da ficha da empresa
   const [eh, setEh] = useState({ obra: '', per: '', mot: '', est: '', ord: 'rec' });
   const [ehlim, setEhlim] = useState(15);
+  const [ehOpen, setEhOpen] = useState(null); // 'obra' | 'per' | 'mot' | 'est' | 'ord' | null
+  const ehfsRef = useRef(null);
+
+  useEffect(() => {
+    if (!ehOpen) return;
+    const handleClickOutside = e => {
+      if (ehfsRef.current && !ehfsRef.current.contains(e.target)) {
+        setEhOpen(null);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [ehOpen]);
 
   // Filtros locais da página de Clientes
   const [cliQ, setCliQ] = useState('');
   const [cliF, setCliF] = useState('todos');
   const [cliSort, setCliSort] = useState('cav');
+  const [cliSortOpen, setCliSortOpen] = useState(false);
+  const cliSortRef = useRef(null);
+
+  useEffect(() => {
+    if (!cliSortOpen) return;
+    const handleClickOutside = e => {
+      if (cliSortRef.current && !cliSortRef.current.contains(e.target)) {
+        setCliSortOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [cliSortOpen]);
 
   // Estado do accordion de alertas
   const [aOpen, setAOpen] = useState(null);
@@ -112,8 +156,24 @@ export default function EscritorioView() {
     );
   };
 
+  const cleanPerson = str => {
+    if (!str) return '';
+    return str
+      .replace(/^Assinado por\s*/i, '')
+      .replace(/^(Sr[aª]?\.?|Sr\.?ª?|D\.)\s*/i, '')
+      .replace(/^[ªº.]\s*/, '')
+      .trim();
+  };
+
+  const fmtSlashDate = d => {
+    if (!d) return '—';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  };
+
   // ================= PÁGINA INÍCIO =================
-  if (page === 'inicio') {
+  if (page === 'inicio' && !obraId && !emp) {
     const items = [];
 
     movs
@@ -142,18 +202,21 @@ export default function EscritorioView() {
       });
 
     pedidos
-      .filter(p => p.estado === 'pendente')
+      .filter(p => p.estado === 'pendente' || p.estado === 'logistica')
       .forEach(p => {
         const o = obras.find(x => x.id === p.obraId);
+        const isPend = p.estado === 'pendente';
         items.push({
-          tone: 'info',
-          icon: 'hand',
-          t: `Pedido de recolha: ${p.qtd} cavaletes`,
-          s: `${o?.nome} · ${o?.cidade} · pedido ${rel(p.data)}`,
+          tone: isPend ? 'info' : 'warn',
+          icon: isPend ? 'hand' : 'truck',
+          t: isPend ? `Pedido de recolha: ${p.qtd} cavaletes` : `Recolha na logística: ${p.qtd} cavaletes`,
+          s: isPend
+            ? `${o?.nome} · ${o?.cidade} · pedido ${rel(p.data)}`
+            : `${o?.nome} · ${o?.cidade} · falta selecionar motorista`,
           action: () => {
             if (o) openObra(o.id);
           },
-          btn: (
+          btn: isPend ? (
             <button
               type="button"
               className="btn btn-soft btn-sm"
@@ -164,6 +227,17 @@ export default function EscritorioView() {
               }}
             >
               Marcar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={e => {
+                e.stopPropagation();
+                openModal({ type: 'atrib', pid: p.id, movId: p.movId });
+              }}
+            >
+              Selecionar motorista
             </button>
           ),
         });
@@ -368,345 +442,634 @@ export default function EscritorioView() {
   }
 
   // ================= FICHA DA EMPRESA (CLIENTE) =================
-  if ((page === 'obras' || page === 'clientes') && emp && !obraId) {
-      const I = empInfo(emp, obras);
-      const L = obras.filter(o => o.empresa === emp).map(o => ({ o, r: resumo(o, movs) }));
-      const ativas = L.filter(x => x.r.total > 0 || x.r.transito > 0);
-      const tot = L.reduce((n, x) => n + x.r.total, 0);
-      const cam = L.reduce((n, x) => n + x.r.transito, 0);
-      const late = L.reduce((n, x) => n + x.r.lateQ, 0);
+  if (emp && !obraId) {
+    const I = empInfo(emp, obras);
+    const L = obras.filter(o => o.empresa === emp).map(o => ({ o, r: resumo(o, movs) }));
+    const ativas = L.filter(x => x.r.total > 0 || x.r.transito > 0);
+    const tot = L.reduce((n, x) => n + x.r.total, 0);
+    const cam = L.reduce((n, x) => n + x.r.transito, 0);
+    const late = L.reduce((n, x) => n + x.r.lateQ, 0);
 
-      const seg = { ok: 0, watch: 0, soon: 0, late: 0 };
-      L.forEach(x => {
-        x.r.lots.forEach(l => {
-          seg[stFor(l.data, l.dias)] += l.qtd;
-        });
+    const seg = { ok: 0, watch: 0, soon: 0, late: 0 };
+    L.forEach(x => {
+      x.r.lots.forEach(l => {
+        seg[stFor(l.data, l.dias)] += l.qtd;
       });
+    });
 
-      const urg = ativas.filter(x => x.r.total).sort((a, b) => a.r.dias - b.r.dias)[0];
-      const ids = new Set(L.map(x => x.o.id));
+    const urg = ativas.filter(x => x.r.total).sort((a, b) => a.r.dias - b.r.dias)[0];
+    const ids = new Set(L.map(x => x.o.id));
 
-      let H = movs.filter(m => ids.has(m.obraId));
-      const mots = [...new Set(H.map(m => m.motorista).filter(Boolean))].sort();
+    let H = movs.filter(m => ids.has(m.obraId));
+    const mots = [...new Set(H.map(m => m.motorista).filter(Boolean))].sort();
 
-      const getEst = m => (m.tipo === 'recolha' ? 'rec' : m.estado === 'divergencia' ? 'dif' : m.assinatura ? 'ass' : 'pend');
-      if (eh.obra) H = H.filter(m => m.obraId === eh.obra);
-      if (eh.mot) H = H.filter(m => m.motorista === eh.mot);
-      if (eh.est) H = H.filter(m => getEst(m) === eh.est);
-      if (eh.per) H = H.filter(m => diffDays(TODAY, m.data) <= Number(eh.per) && m.data <= TODAY);
+    const getEst = m => (m.tipo === 'recolha' ? 'rec' : m.estado === 'divergencia' ? 'dif' : m.assinatura ? 'ass' : 'pend');
+    if (eh.obra) H = H.filter(m => m.obraId === eh.obra);
+    if (eh.mot) H = H.filter(m => m.motorista === eh.mot);
+    if (eh.est) H = H.filter(m => getEst(m) === eh.est);
+    if (eh.per) H = H.filter(m => diffDays(TODAY, m.data) <= Number(eh.per) && m.data <= TODAY);
 
-      H.sort(eh.ord === 'qtd' ? (a, b) => b.qtd - a.qtd : (a, b) => b.data - a.data);
-      const shownMovs = H.slice(0, ehlim);
+    H.sort(eh.ord === 'qtd' ? (a, b) => b.qtd - a.qtd : (a, b) => new Date(b.data) - new Date(a.data));
+    const shownMovs = H.slice(0, ehlim);
 
-      return (
-        <>
-          <button type="button" className="back" onClick={goBack}>
-            <Icon name="left" />Voltar atrás
-          </button>
+    return (
+      <>
+        <button type="button" className="back" onClick={goBack}>
+          <Icon name="left" />Voltar atrás
+        </button>
 
-          {empFrom && obras.find(o => o.id === empFrom)?.empresa === emp && (
-            <div className="otabs">
-              <button type="button" onClick={() => openObra(empFrom)}>
-                <Icon name="obra" />Ficha da obra
-              </button>
-              <button type="button" aria-current="page">
-                <Icon name="users" />Empresa: {emp}
-                <span className="otb">{L.length}</span>
-              </button>
-            </div>
-          )}
+        {empFrom && obras.find(o => o.id === empFrom)?.empresa === emp && (
+          <div className="otabs">
+            <button type="button" onClick={() => openObra(empFrom)}>
+              <Icon name="obra" />Ficha da obra
+            </button>
+            <button type="button" aria-current="page">
+              <Icon name="users" />Empresa: {emp}
+            </button>
+          </div>
+        )}
 
-          <section className="ocard ohero">
-            <div className="oh-top">
-              <div>
-                <p className="oh-emp">Ficha da empresa · NIF {I.nif}</p>
-                <h1 className="oh-t">{emp}</h1>
+        <section className="ocard emp-unified-card">
+          <div className="emp-uni-top">
+            <div className="emp-uni-main">
+              <div className="emp-meta-top">
+                {I.morada && I.morada !== '—' && (
+                  <>
+                    <span className="emp-meta-loc">
+                      <Icon name="pin" />
+                      {I.morada}
+                    </span>
+                    <span className="emp-meta-dash">—</span>
+                  </>
+                )}
+                <span className="emp-meta-nif">NIF {I.nif}</span>
               </div>
-              <div className="oh-act">
+              <h1 className="oh-t">{emp}</h1>
+              <div className="emp-contact-strip">
+                <span className="emp-cs-item" title="Responsável">
+                  <Icon name="user" />
+                  <span>{I.resp}</span>
+                </span>
+                <span className="emp-cs-dot">·</span>
+                <a className="emp-cs-item" href={`tel:+351${I.tm.replace(/\D/g, '')}`} title="Telemóvel">
+                  <Icon name="phone" />
+                  <span>{I.tm}</span>
+                </a>
+                <span className="emp-cs-dot">·</span>
+                <a className="emp-cs-item" href={`mailto:${I.email}`} title="Email">
+                  <Icon name="mail" />
+                  <span>{I.email}</span>
+                </a>
+              </div>
+            </div>
+            <div className="oh-act">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => openModal({ type: 'nova', empresa: emp })}
+              >
+                <Icon name="plus" />Nova entrega
+              </button>
+              <button
+                type="button"
+                className="btn btn-ok"
+                onClick={() => openModal({ type: 'recolha', empresa: emp })}
+              >
+                <Icon name="recolha" />Registar recolha
+              </button>
+              {urg && (
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  onClick={() => openModal({ type: 'nova', empresa: emp })}
+                  className="btn btn-ghost"
+                  onClick={() =>
+                    openModal({
+                      type: 'email',
+                      obraId: urg.o.id,
+                      tpl: urg.r.st === 'late' ? 'terminado' : 'amigavel',
+                    })
+                  }
                 >
-                  <Icon name="plus" />Nova entrega
+                  <Icon name="mail" />Enviar email
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-ok"
-                  onClick={() => openModal({ type: 'recolha', empresa: emp })}
-                >
-                  <Icon name="recolha" />Registar recolha
-                </button>
-                {urg && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() =>
-                      openModal({
-                        type: 'email',
-                        obraId: urg.o.id,
-                        tpl: urg.r.st === 'late' ? 'terminado' : 'amigavel',
-                      })
-                    }
-                  >
-                    <Icon name="mail" />Enviar email
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="oh-con">
-              <div className="oc-i">
-                <small>Responsável</small>
-                <span><Icon name="user" />{I.resp}</span>
-              </div>
-              <div className="oc-i">
-                <small>Telefone</small>
-                <span>
-                  <Icon name="phone" />
-                  <a className="tel-link" target="_blank" rel="noopener noreferrer" href={`tel:+351${I.tel.replace(/\D/g, '')}`}>
-                    {I.tel}
-                  </a>
-                </span>
-              </div>
-              <div className="oc-i">
-                <small>Telemóvel</small>
-                <span>
-                  <Icon name="phone" />
-                  <a className="tel-link" target="_blank" rel="noopener noreferrer" href={`tel:+351${I.tm.replace(/\D/g, '')}`}>
-                    {I.tm}
-                  </a>
-                </span>
-              </div>
-              <div className="oc-i">
-                <small>Email</small>
-                <span><Icon name="mail" />{I.email}</span>
-              </div>
-            </div>
-          </section>
-
-          <div className="ekpis">
-            <div className="ekpi">
-              <small>Cavaletes em posse</small>
-              <span className="num">{fmtN(tot)}</span>
-              <em>em {ativas.filter(x => x.r.total > 0).length} obra{ativas.filter(x => x.r.total > 0).length === 1 ? '' : 's'}</em>
-            </div>
-            <div className="ekpi">
-              <small>A caminho</small>
-              <span className="num">{fmtN(cam)}</span>
-              <em>por confirmar</em>
-            </div>
-            <div className={`ekpi${late ? ' late' : ''}`}>
-              <small>Prazo de {PRAZO} dias ultrapassado</small>
-              <span className="num">{fmtN(late)}</span>
-              <em>{late ? 'cavaletes fora do prazo' : 'nenhum fora do prazo'}</em>
-            </div>
-            <div className="ekpi wide">
-              <small>Distribuição dos prazos</small>
-              <span className="ebar">
-                {['ok', 'watch', 'soon', 'late'].map(k =>
-                  seg[k] ? (
-                    <i key={k} style={{ flex: seg[k], background: ST[k].color }} title={`${seg[k]} cavaletes`} />
-                  ) : null
-                )}
-              </span>
-              <span className="elg">
-                {[
-                  ['ok', '< 30 dias'],
-                  ['watch', '30–50'],
-                  ['soon', '50–60'],
-                  ['late', 'Terminado'],
-                ].map(([k, l]) => (
-                  <span key={k}>
-                    <i style={{ background: ST[k].color }} />
-                    {l} <b>{seg[k]}</b>
-                  </span>
-                ))}
-              </span>
+              )}
             </div>
           </div>
 
-          <section className="ocard">
-            <div className="oc-h">
-              <div>
-                <h2>Obras da empresa</h2>
-                <p>Cada obra tem o seu responsável local e o seu prazo.</p>
-              </div>
-              <span className="oc-badge">{L.length} obra{L.length > 1 ? 's' : ''}</span>
+          <div className="emp-uni-divider" />
+
+          <div className="emp-uni-kpis">
+            <div className="emp-uni-kpi">
+              <small>Total em Obras</small>
+              <span className="num">{fmtN(tot)}</span>
             </div>
-            <div className="eobras">
-              {L.slice()
-                .sort((a, b) => (a.r.dias ?? 999) - (b.r.dias ?? 999))
-                .map(({ o, r }) => {
-                  const used = r.first ? Math.min(1, Math.max(0, 1 - r.dias / PRAZO)) : 0;
-                  return (
-                    <article key={o.id} className="eob" style={{ '--c': r.total ? ST[r.st].color : 'var(--line)' }}>
-                      <div className="eob-h">
-                        <div>
-                          <b>{o.nome}</b>
-                          <span><Icon name="pin" />{o.morada}, {o.cidade}</span>
-                        </div>
-                        <div className="eob-n">
-                          <span className="num">{r.total}</span>
-                          <small>em obra{r.transito ? ` · +${r.transito} a caminho` : ''}</small>
-                        </div>
+            <div className="emp-uni-kpi">
+              <small>Cavaletes a Caminho</small>
+              <span className="num">{fmtN(cam)}</span>
+            </div>
+            <div className={`emp-uni-kpi${late ? ' late' : ''}`}>
+              <small>Fora do Prazo (6m)</small>
+              <span className="num">{fmtN(late)}</span>
+            </div>
+            <div className="emp-uni-kpi">
+              <small>Obras Ativas</small>
+              <span className="num">{ativas.length}</span>
+            </div>
+          </div>
+
+          {tot > 0 && (
+            <div className="emp-uni-prazos">
+              <div className="emp-prazos-left">
+                <span className="emp-prazos-title">Distribuição dos prazos</span>
+                <span className="emp-prazos-bar">
+                  {['ok', 'watch', 'soon', 'late'].map(k =>
+                    seg[k] ? (
+                      <i key={k} style={{ flex: seg[k], background: ST[k].color }} title={`${seg[k]} cavaletes`} />
+                    ) : null
+                  )}
+                </span>
+              </div>
+              <div className="emp-prazos-legend">
+                {[
+                  ['ok', '< 30 dias'],
+                  ['watch', '30–50 d.'],
+                  ['soon', '50–60 d.'],
+                  ['late', 'Terminado'],
+                ].map(([k, l], idx) => (
+                  <React.Fragment key={k}>
+                    {idx > 0 && <span className="emp-prazos-sep">—</span>}
+                    <span className="emp-prazos-legend-item">
+                      <i style={{ background: ST[k].color }} />
+                      <span>{l}</span>
+                    </span>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="ocard">
+          <div className="oc-h">
+            <div>
+              <h2>Obras da empresa</h2>
+              <p>Cada obra tem o seu responsável local e o respetivo estado de prazo.</p>
+            </div>
+          </div>
+          <div className="eobras-list">
+            {L.slice()
+              .sort((a, b) => (a.r.dias ?? 999) - (b.r.dias ?? 999))
+              .map(({ o, r }) => {
+                const isLate = r.total > 0 && r.dias != null && r.dias < 0;
+                const isOk = r.total > 0 && r.dias != null && r.dias >= 0;
+
+                return (
+                  <article
+                    key={o.id}
+                    className="eob-row"
+                    onClick={() => openObra(o.id)}
+                  >
+                    <div className="eob-row-info">
+                      <div className="eob-row-title">
+                        <b>{o.nome}</b>
+                        <span className="eob-row-loc">
+                          <Icon name="pin" />
+                          {o.morada}, {o.cidade}
+                        </span>
                       </div>
-                      <div className="eob-c">
-                        <span><Icon name="user" />{o.contacto}</span>
+                      <div className="eob-row-sub">
+                        {o.contacto && (
+                          <span>
+                            <Icon name="user" />
+                            {o.contacto}
+                          </span>
+                        )}
                         {/\d/.test(o.tel) && (
                           <span>
                             <Icon name="phone" />
-                            <a className="tel-link" target="_blank" rel="noopener noreferrer" href={`tel:+351${o.tel.replace(/\D/g, '')}`}>
+                            <a
+                              className="tel-link"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              href={`tel:+351${o.tel.replace(/\D/g, '')}`}
+                              onClick={e => e.stopPropagation()}
+                            >
                               {o.tel}
                             </a>
                           </span>
                         )}
                       </div>
-                      {r.first ? (
-                        <div className="prazo">
-                          <div className="bar" role="img" aria-label={`${Math.round(used * 100)}% do prazo de 60 dias usado`}>
-                            <i style={{ width: `${Math.max(4, used * 100)}%`, background: ST[r.st].soft }} />
-                            <div className="ticks"><span /><span /><span /><span /><span /><span /></div>
-                          </div>
-                          <small>
-                            <span style={{ color: ST[r.st].color, fontWeight: 500 }}>{diasTxt(r.dias)}</span> · prazo {fd(r.first.prazo)}
-                          </small>
-                        </div>
-                      ) : (
-                        <div className="prazo"><small>Sem cavaletes na obra</small></div>
-                      )}
-                      <button type="button" className="eob-go" onClick={() => openObra(o.id)}>
-                        Abrir ficha desta obra
-                        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 12h14M13 6l6 6-6 6" />
-                        </svg>
-                      </button>
-                    </article>
-                  );
-                })}
-            </div>
-          </section>
-
-          <section className="ocard">
-            <div className="oc-h">
-              <div>
-                <h2>Histórico de movimentos</h2>
-                <p>Todas as guias de entrega e recolha com esta empresa.</p>
-              </div>
-              <span className="oc-sub">{H.length} movimento{H.length === 1 ? '' : 's'}</span>
-            </div>
-
-            <div className="ehfs">
-              <label className="ehf">
-                <span>Obra</span>
-                <select value={eh.obra} onChange={e => { setEh(s => ({ ...s, obra: e.target.value })); setEhlim(15); }}>
-                  <option value="">Todas as obras</option>
-                  {L.map(x => (
-                    <option key={x.o.id} value={x.o.id}>{x.o.nome}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="ehf">
-                <span>Data</span>
-                <select value={eh.per} onChange={e => { setEh(s => ({ ...s, per: e.target.value })); setEhlim(15); }}>
-                  <option value="">Sempre</option>
-                  <option value="7">Últimos 7 dias</option>
-                  <option value="30">Últimos 30 dias</option>
-                  <option value="90">Últimos 90 dias</option>
-                </select>
-              </label>
-
-              <label className="ehf">
-                <span>Motorista</span>
-                <select value={eh.mot} onChange={e => { setEh(s => ({ ...s, mot: e.target.value })); setEhlim(15); }}>
-                  <option value="">Todos</option>
-                  {mots.map(m => (
-                    <option key={m} value={m}>Sr. {m}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="ehf">
-                <span>Estado</span>
-                <select value={eh.est} onChange={e => { setEh(s => ({ ...s, est: e.target.value })); setEhlim(15); }}>
-                  <option value="">Todos</option>
-                  <option value="ass">Entregue e assinado</option>
-                  <option value="pend">Por assinar</option>
-                  <option value="dif">Com diferença</option>
-                  <option value="rec">Recolhas</option>
-                </select>
-              </label>
-
-              <label className="ehf">
-                <span>Ordenar</span>
-                <select value={eh.ord} onChange={e => setEh(s => ({ ...s, ord: e.target.value }))}>
-                  <option value="rec">Mais recentes</option>
-                  <option value="qtd">Maior quantidade</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="ohist">
-              {shownMovs.length === 0 ? (
-                <p className="muted" style={{ padding: '14px 0', textAlign: 'center' }}>
-                  Nenhum movimento com estes filtros.
-                </p>
-              ) : (
-                shownMovs.map(m => {
-                  const isE = m.tipo === 'entrega';
-                  const o = obras.find(x => x.id === m.obraId);
-                  const subParts = [
-                    o?.nome,
-                    m.motorista ? `Sr. ${m.motorista}` : '',
-                    isE ? (m.assinatura ? `Assinado por ${m.assinatura}` : 'Por assinar') : '',
-                  ].filter(Boolean);
-
-                  return (
-                    <div key={m.id} className={`oh-row ${isE ? 'is-e' : 'is-r'}`}>
-                      <span className="oh-type">{isE ? 'Entrega' : 'Recolha'}</span>
-                      <div className="oh-rt">
-                        <b>
-                          {isE ? qEntregue(m) : m.qtd} cavaletes <span className="atl-code">{m.guia}</span>
-                          <small> · {fd(m.data)}</small>
-                        </b>
-                        <span>{subParts.join(' · ')}</span>
-                      </div>
-                      {movPill(m)}
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => openModal({ type: 'mov', id: m.id })}
-                      >
-                        Detalhes
-                      </button>
                     </div>
-                  );
-                })
+
+                    <div className="eob-row-status">
+                      {isLate ? (
+                        <span className="eob-st-tag is-late">
+                          Fora de prazo ({Math.abs(r.dias)}d)
+                        </span>
+                      ) : isOk ? (
+                        <span className="eob-st-tag is-ok">
+                          Em prazo ({r.dias}d restantes)
+                        </span>
+                      ) : (
+                        <span className="eob-st-tag is-none">
+                          Sem cavaletes
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="eob-row-count">
+                      <span className="num">{r.total}</span>
+                      <small>
+                        {r.transito > 0 ? `+${r.transito} a caminho` : 'em obra'}
+                      </small>
+                    </div>
+
+                    <div className="eob-row-action">
+                      <span className="eob-arrow">
+                        <Icon name="right" />
+                      </span>
+                    </div>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+
+        <section className="ocard ohist-card">
+          <div className="oc-h">
+            <div>
+              <h2>Histórico de movimentos</h2>
+              <p>Todas as guias de entrega e recolha com esta empresa.</p>
+            </div>
+
+            <div className="ehfs" ref={ehfsRef}>
+            {/* Obra */}
+            <div className="cli-sort-wrap">
+              <button
+                type="button"
+                className={`cli-sort-btn${ehOpen === 'obra' ? ' open' : ''}`}
+                onClick={() => setEhOpen(o => o === 'obra' ? null : 'obra')}
+                aria-haspopup="listbox"
+                aria-expanded={ehOpen === 'obra'}
+              >
+                <span className="cli-sort-label">
+                  {eh.obra ? (L.find(x => x.o.id === eh.obra)?.o.nome || 'Todas as obras') : 'Todas as obras'}
+                </span>
+                <svg
+                  className={`cli-sort-arrow${ehOpen === 'obra' ? ' open' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {ehOpen === 'obra' && (
+                <div className="cli-sort-pop" role="listbox">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={!eh.obra}
+                    className={`cli-sort-opt${!eh.obra ? ' is-sel' : ''}`}
+                    onClick={() => {
+                      setEh(s => ({ ...s, obra: '' }));
+                      setEhlim(15);
+                      setEhOpen(null);
+                    }}
+                  >
+                    <div className="cli-opt-info">
+                      <span className="cli-opt-title">Todas as obras</span>
+                    </div>
+                    {!eh.obra && (
+                      <span className="cli-opt-check">
+                        <Icon name="check" />
+                      </span>
+                    )}
+                  </button>
+                  {L.map(x => {
+                    const isSel = eh.obra === x.o.id;
+                    return (
+                      <button
+                        key={x.o.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSel}
+                        className={`cli-sort-opt${isSel ? ' is-sel' : ''}`}
+                        onClick={() => {
+                          setEh(s => ({ ...s, obra: x.o.id }));
+                          setEhlim(15);
+                          setEhOpen(null);
+                        }}
+                      >
+                        <div className="cli-opt-info">
+                          <span className="cli-opt-title">{x.o.nome}</span>
+                        </div>
+                        {isSel && (
+                          <span className="cli-opt-check">
+                            <Icon name="check" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
-            {H.length > shownMovs.length && (
-              <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
-                <span className="muted" style={{ fontSize: '0.88rem' }}>
-                  A mostrar {shownMovs.length} de {H.length}
+            {/* Data */}
+            <div className="cli-sort-wrap">
+              <button
+                type="button"
+                className={`cli-sort-btn${ehOpen === 'per' ? ' open' : ''}`}
+                onClick={() => setEhOpen(o => o === 'per' ? null : 'per')}
+                aria-haspopup="listbox"
+                aria-expanded={ehOpen === 'per'}
+              >
+                <span className="cli-sort-label">
+                  {eh.per === '7' ? 'Últimos 7 dias' : eh.per === '30' ? 'Últimos 30 dias' : eh.per === '90' ? 'Últimos 90 dias' : 'Todas as datas'}
                 </span>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setEhlim(l => l + 15)}
+                <svg
+                  className={`cli-sort-arrow${ehOpen === 'per' ? ' open' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <Icon name="plus" />Ver mais 15
-                </button>
-              </div>
-            )}
-          </section>
-        </>
-      );
-    }
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {ehOpen === 'per' && (
+                <div className="cli-sort-pop" role="listbox">
+                  {[
+                    ['', 'Todas as datas'],
+                    ['7', 'Últimos 7 dias'],
+                    ['30', 'Últimos 30 dias'],
+                    ['90', 'Últimos 90 dias'],
+                  ].map(([val, label]) => {
+                    const isSel = eh.per === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        role="option"
+                        aria-selected={isSel}
+                        className={`cli-sort-opt${isSel ? ' is-sel' : ''}`}
+                        onClick={() => {
+                          setEh(s => ({ ...s, per: val }));
+                          setEhlim(15);
+                          setEhOpen(null);
+                        }}
+                      >
+                        <div className="cli-opt-info">
+                          <span className="cli-opt-title">{label}</span>
+                        </div>
+                        {isSel && (
+                          <span className="cli-opt-check">
+                            <Icon name="check" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Estado */}
+            <div className="cli-sort-wrap">
+              <button
+                type="button"
+                className={`cli-sort-btn${ehOpen === 'est' ? ' open' : ''}`}
+                onClick={() => setEhOpen(o => o === 'est' ? null : 'est')}
+                aria-haspopup="listbox"
+                aria-expanded={ehOpen === 'est'}
+              >
+                <span className="cli-sort-label">
+                  {eh.est === 'ass'
+                    ? 'Entregue e assinado'
+                    : eh.est === 'pend'
+                    ? 'Por assinar'
+                    : eh.est === 'dif'
+                    ? 'Com diferença'
+                    : eh.est === 'rec'
+                    ? 'Recolhas'
+                    : 'Todos os estados'}
+                </span>
+                <svg
+                  className={`cli-sort-arrow${ehOpen === 'est' ? ' open' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {ehOpen === 'est' && (
+                <div className="cli-sort-pop" role="listbox">
+                  {[
+                    ['', 'Todos os estados'],
+                    ['ass', 'Entregue e assinado'],
+                    ['pend', 'Por assinar'],
+                    ['dif', 'Com diferença'],
+                    ['rec', 'Recolhas'],
+                  ].map(([val, label]) => {
+                    const isSel = eh.est === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        role="option"
+                        aria-selected={isSel}
+                        className={`cli-sort-opt${isSel ? ' is-sel' : ''}`}
+                        onClick={() => {
+                          setEh(s => ({ ...s, est: val }));
+                          setEhlim(15);
+                          setEhOpen(null);
+                        }}
+                      >
+                        <div className="cli-opt-info">
+                          <span className="cli-opt-title">{label}</span>
+                        </div>
+                        {isSel && (
+                          <span className="cli-opt-check">
+                            <Icon name="check" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Ordenar */}
+            <div className="cli-sort-wrap ehf-sort">
+              <button
+                type="button"
+                className={`cli-sort-btn${ehOpen === 'ord' ? ' open' : ''}`}
+                onClick={() => setEhOpen(o => o === 'ord' ? null : 'ord')}
+                aria-haspopup="listbox"
+                aria-expanded={ehOpen === 'ord'}
+              >
+                <span className="cli-sort-label">
+                  {eh.ord === 'qtd' ? 'Maior quantidade' : 'Mais recentes'}
+                </span>
+                <svg
+                  className={`cli-sort-arrow${ehOpen === 'ord' ? ' open' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {ehOpen === 'ord' && (
+                <div className="cli-sort-pop" role="listbox">
+                  {[
+                    ['rec', 'Mais recentes'],
+                    ['qtd', 'Maior quantidade'],
+                  ].map(([val, label]) => {
+                    const isSel = eh.ord === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        role="option"
+                        aria-selected={isSel}
+                        className={`cli-sort-opt${isSel ? ' is-sel' : ''}`}
+                        onClick={() => {
+                          setEh(s => ({ ...s, ord: val }));
+                          setEhOpen(null);
+                        }}
+                      >
+                        <div className="cli-opt-info">
+                          <span className="cli-opt-title">{label}</span>
+                        </div>
+                        {isSel && (
+                          <span className="cli-opt-check">
+                            <Icon name="check" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="cli-table-card ohist-table-card">
+            <div className="cli-table-wrap">
+              <table className="cli-table ohist-table">
+                <thead>
+                  <tr>
+                    <th>Guia</th>
+                    <th>Tipo</th>
+                    <th>Obra</th>
+                    <th>Data</th>
+                    <th>Quantidade</th>
+                    <th>Motorista</th>
+                    <th>Assinatura / Estado</th>
+                    <th style={{ width: '40px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownMovs.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" style={{ textAlign: 'center', padding: '32px' }}>
+                        <p className="muted" style={{ margin: 0 }}>Nenhum movimento encontrado com os filtros selecionados.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    shownMovs.map(m => {
+                      const isE = m.tipo === 'entrega';
+                      const o = obras.find(x => x.id === m.obraId);
+                      const motNome = m.motorista ? cleanPerson(m.motorista) : '—';
+                      const assEst = m.tipo === 'recolha'
+                        ? (m.estado === 'concluida'
+                            ? 'Recolhida'
+                            : m.estado === 'divergencia'
+                            ? 'Divergência'
+                            : m.estado === 'agendada'
+                            ? 'Agendada'
+                            : m.estado === 'por_atribuir'
+                            ? 'Na logística'
+                            : 'Pendente')
+                        : m.assinatura
+                        ? cleanPerson(m.assinatura)
+                        : (m.estado === 'divergencia' ? 'Divergência' : 'Por assinar');
+
+                      return (
+                        <tr
+                          key={m.id}
+                          className="oh-trow"
+                          onClick={() => openModal({ type: 'mov', id: m.id })}
+                        >
+                          <td>{m.guia}</td>
+                          <td>
+                            <span className={`oh-txt-tipo ${isE ? 'is-e' : 'is-r'}`}>
+                              {isE ? 'Entrega' : 'Recolha'}
+                            </span>
+                          </td>
+                          <td>{o?.nome || '—'}</td>
+                          <td>{fmtSlashDate(m.data)}</td>
+                          <td>{isE ? qEntregue(m) : m.qtd} cavaletes</td>
+                          <td>{motNome}</td>
+                          <td>{assEst}</td>
+                          <td style={{ textAlign: 'right', width: '40px' }}>
+                            <button
+                              type="button"
+                              className="oh-row-arrow"
+                              onClick={e => {
+                                e.stopPropagation();
+                                openModal({ type: 'mov', id: m.id });
+                              }}
+                              aria-label="Ver detalhes"
+                            >
+                              <Icon name="right" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {H.length > shownMovs.length && (
+            <div className="more" style={{ display: 'flex', justifyContent: 'center', marginTop: '14px' }}>
+              <span className="muted" style={{ fontSize: '0.88rem' }}>
+                A mostrar {shownMovs.length} de {H.length}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setEhlim(l => l + 15)}
+              >
+                <Icon name="plus" />Ver mais 15
+              </button>
+            </div>
+          )}
+        </section>
+      </>
+    );
+  }
 
   // ================= PÁGINA CLIENTES =================
-  if (page === 'clientes') {
+  if (page === 'clientes' && !obraId) {
     // Agrupa dados de todas as empresas clientes
     const allEmpsMap = new Map();
     obras.forEach(o => {
@@ -753,19 +1116,19 @@ export default function EscritorioView() {
     // Filtros e pesquisa
     const qNorm = cliQ.toLowerCase().trim();
     let filteredClients = clientListRaw.filter(c => {
-      if (cliF === 'com_cav' && c.totalCav === 0) return false;
       if (cliF === 'atraso' && c.lateQ === 0) return false;
-      if (cliF === 'sem_cav' && c.totalCav > 0) return false;
+      if (cliF === 'obras_ativas' && c.obras.length === 0) return false;
+      if (cliF === 'em_dia' && (c.lateQ > 0 || c.totalCav === 0)) return false;
 
       if (qNorm) {
         const matchName = c.name.toLowerCase().includes(qNorm);
-        const matchNif = (c.info?.nif || '').toLowerCase().includes(qNorm);
         const matchResp = (c.info?.resp || '').toLowerCase().includes(qNorm);
         const matchCity = (c.info?.morada || '').toLowerCase().includes(qNorm);
+        const matchEmail = (c.info?.email || '').toLowerCase().includes(qNorm);
         const matchObra = c.obras.some(
           x => x.o.nome.toLowerCase().includes(qNorm) || x.o.cidade.toLowerCase().includes(qNorm)
         );
-        return matchName || matchNif || matchResp || matchCity || matchObra;
+        return matchName || matchResp || matchCity || matchEmail || matchObra;
       }
       return true;
     });
@@ -780,12 +1143,23 @@ export default function EscritorioView() {
       return b.totalCav - a.totalCav || a.name.localeCompare(b.name, 'pt');
     });
 
+    const activeObrasCount = clientListRaw.filter(c => c.obras.length > 0).length;
+    const inDayClientsCount = clientListRaw.filter(c => c.lateQ === 0 && c.totalCav > 0).length;
+
     const chips = [
-      ['todos', 'Todos', totalClientsCount],
-      ['com_cav', 'Com cavaletes', withCavCount],
-      ['atraso', 'Fora do prazo', lateClientsCount],
-      ['sem_cav', 'Sem cavaletes', totalClientsCount - withCavCount],
+      { k: 'todos', label: 'Todos' },
+      { k: 'atraso', label: 'Com Atrasos' },
+      { k: 'obras_ativas', label: 'Com Obras Ativas' },
+      { k: 'em_dia', label: 'Em Dia' },
     ];
+
+    const cliSortOptions = [
+      { k: 'cav', label: 'Mais Cavaletes' },
+      { k: 'atraso', label: 'Maior Atraso' },
+      { k: 'obras', label: 'Mais Obras' },
+      { k: 'nome', label: 'Nome (A – Z)' },
+    ];
+    const currentSort = cliSortOptions.find(o => o.k === cliSort) || cliSortOptions[0];
 
     return (
       <div key={`cli-${page}`} className="admin-page-anim">
@@ -795,9 +1169,6 @@ export default function EscritorioView() {
               <span className="phi"><Icon name="users" /></span>
               <span>Clientes</span>
             </h1>
-            <p className="ph-desc" style={{ color: 'var(--muted)', fontSize: '0.95rem', margin: '4px 0 0' }}>
-              Diretório de empresas parceiras, histórico de obras e controlo direto de cavaletes.
-            </p>
           </div>
           <div className="ph-act">
             <button
@@ -831,15 +1202,17 @@ export default function EscritorioView() {
           </div>
         </div>
 
-        {/* Barra de Filtros e Pesquisa */}
+        {/* Barra de Filtros e Pesquisa igual à página de Obras */}
         <div className="toolbar" style={{ marginTop: '22px' }}>
-          <div className="search">
+          <label className="search" htmlFor="cli-q">
             <Icon name="search" />
             <input
-              type="text"
-              placeholder="Pesquisar por cliente, NIF, responsável ou obra..."
+              id="cli-q"
+              type="search"
+              placeholder="Pesquisar por empresa, responsável, email ou obra..."
               value={cliQ}
               onChange={e => setCliQ(e.target.value)}
+              aria-label="Pesquisar"
             />
             {cliQ && (
               <button
@@ -851,202 +1224,182 @@ export default function EscritorioView() {
                 <Icon name="x" />
               </button>
             )}
-          </div>
+          </label>
 
-          <div className="chips" role="group" aria-label="Filtro de clientes">
-            {chips.map(([k, label, cnt]) => (
+          <div className="chips-seg" role="group" aria-label="Filtrar clientes">
+            {chips.map(ch => (
               <button
-                key={k}
+                key={ch.k}
                 type="button"
                 className="chip"
-                aria-pressed={cliF === k}
-                onClick={() => setCliF(k)}
+                aria-pressed={cliF === ch.k}
+                onClick={() => setCliF(ch.k)}
               >
-                {label} <span className="n">{cnt}</span>
+                <span>{ch.label}</span>
               </button>
             ))}
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 500 }}>Ordenar:</span>
-            <select
-              value={cliSort}
-              onChange={e => setCliSort(e.target.value)}
-              style={{
-                font: 'inherit',
-                fontSize: '0.88rem',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--line)',
-                background: 'var(--surface)',
-                color: 'var(--ink)',
-              }}
+          <div className="cli-sort-wrap" ref={cliSortRef}>
+            <button
+              type="button"
+              className={`cli-sort-btn${cliSortOpen ? ' open' : ''}`}
+              onClick={() => setCliSortOpen(v => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={cliSortOpen}
             >
-              <option value="cav">Mais cavaletes</option>
-              <option value="atraso">Maior atraso</option>
-              <option value="obras">Mais obras</option>
-              <option value="nome">Nome (A – Z)</option>
-            </select>
+              <svg className="cli-sort-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M6 12h12M9 18h6" />
+              </svg>
+              <span className="cli-sort-label">
+                {currentSort.label}
+              </span>
+              <svg
+                className={`cli-sort-arrow${cliSortOpen ? ' open' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {cliSortOpen && (
+              <div className="cli-sort-pop" role="listbox">
+                <div className="cli-pop-head">Ordenar clientes</div>
+                {cliSortOptions.map(opt => {
+                  const isSel = cliSort === opt.k;
+                  return (
+                    <button
+                      key={opt.k}
+                      type="button"
+                      role="option"
+                      aria-selected={isSel}
+                      className={`cli-sort-opt${isSel ? ' is-sel' : ''}`}
+                      onClick={() => {
+                        setCliSort(opt.k);
+                        setCliSortOpen(false);
+                      }}
+                    >
+                      <div className="cli-opt-info">
+                        <span className="cli-opt-title">{opt.label}</span>
+                        <span className="cli-opt-sub">{opt.sub}</span>
+                      </div>
+                      {isSel && (
+                        <span className="cli-opt-check">
+                          <Icon name="check" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Lista de Clientes em Linha */}
+        {/* Tabela de Clientes Estilo Clean (Referência) */}
         {filteredClients.length === 0 ? (
           <div className="card" style={{ padding: '36px', textAlign: 'center', marginTop: '16px' }}>
             <p className="muted" style={{ fontSize: '1rem', margin: 0 }}>Nenhum cliente encontrado com estes filtros.</p>
           </div>
         ) : (
-          <div className="cli-list">
-            {filteredClients.map(c => {
-              const totFolder = Math.max(1, c.totalCav);
-              return (
-                <div
-                  key={c.name}
-                  className="cli-row"
-                  onClick={() => openEmpresa(c.name)}
-                >
-                  <div className="cli-row-left">
-                    <div className="cli-row-head">
-                      <b className="cli-row-name">{c.name}</b>
-                      {c.lateQ > 0 ? (
-                        <span className="pill tone-late" title={`${c.lateQ} cavaletes fora do prazo`}>
-                          <Icon name="alert" />
-                          {c.lateQ} fora do prazo
-                        </span>
-                      ) : c.totalCav > 0 ? (
-                        <span className="pill tone-ok">
-                          <Icon name="check" /> Regular
-                        </span>
-                      ) : (
-                        <span className="pill pill-sm" style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}>
-                          Sem cavaletes
-                        </span>
-                      )}
-                      {c.info?.morada && (
-                        <>
-                          <span className="cli-row-sep">·</span>
-                          <span style={{ color: 'var(--muted)', fontSize: '0.88rem' }}>{c.info.morada}</span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="cli-row-sub">
-                      <span>NIF {c.info.nif}</span>
-                      {c.info.resp && (
-                        <>
-                          <span className="cli-row-sep">·</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Icon name="user" /> {c.info.resp}
-                          </span>
-                        </>
-                      )}
-                      {/\d/.test(c.info.tel) && (
-                        <>
-                          <span className="cli-row-sep">·</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Icon name="phone" />
+          <div className="cli-table-card">
+            <div className="cli-table-wrap">
+              <table className="cli-table">
+                <thead>
+                  <tr>
+                    <th>Empresa</th>
+                    <th>Contacto Principal</th>
+                    <th style={{ textAlign: 'center' }}>Obras</th>
+                    <th style={{ textAlign: 'center' }}>Cavaletes</th>
+                    <th style={{ textAlign: 'center' }}>Fora Prazo</th>
+                    <th>Estado</th>
+                    <th style={{ width: '40px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredClients.map(c => {
+                    return (
+                      <tr
+                        key={c.name}
+                        onClick={() => openEmpresa(c.name)}
+                      >
+                        <td className="cli-td-empresa">
+                          <b>{c.name}</b>
+                          {c.info?.email && (
                             <a
-                              className="tel-link"
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              href={`mailto:${c.info.email}`}
+                              onClick={e => e.stopPropagation()}
+                              title={c.info.email}
+                            >
+                              <Icon name="mail" />
+                              <span>{c.info.email}</span>
+                            </a>
+                          )}
+                        </td>
+
+                        <td className="cli-td-contato">
+                          {c.info?.resp ? <b>{c.info.resp}</b> : <span className="muted">—</span>}
+                          {/\d/.test(c.info?.tel) && (
+                            <a
                               href={`tel:+351${c.info.tel.replace(/\D/g, '')}`}
                               onClick={e => e.stopPropagation()}
+                              title={c.info.tel}
                             >
-                              {c.info.tel}
+                              <Icon name="phone" />
+                              <span>{c.info.tel}</span>
                             </a>
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="cli-row-meta">
-                      <span style={{ fontWeight: 500 }}>
-                        {c.obras.length} obra{c.obras.length !== 1 ? 's' : ''} registada{c.obras.length !== 1 ? 's' : ''}
-                      </span>
-                      {c.transito > 0 && (
-                        <>
-                          <span className="cli-row-sep">·</span>
-                          <span style={{ color: 'var(--info)', fontWeight: 600 }}>
-                            +{c.transito} a caminho
-                          </span>
-                        </>
-                      )}
-                      {c.totalCav > 0 && c.earliestDias !== null && (
-                        <>
-                          <span className="cli-row-sep">·</span>
-                          <span style={{ color: c.earliestDias < 0 ? 'var(--late)' : 'var(--muted)', fontWeight: c.earliestDias < 0 ? 700 : 400 }}>
-                            {c.earliestDias < 0
-                              ? `Ultrapassado há ${Math.abs(c.earliestDias)} dias`
-                              : diasTxt(c.earliestDias)}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="cli-row-mid">
-                    {c.totalCav > 0 ? (
-                      <div className="cli-row-prazo">
-                        <div className="fbar">
-                          {['late', 'soon', 'watch', 'ok'].map(s =>
-                            c.seg[s] ? (
-                              <i
-                                key={s}
-                                style={{
-                                  width: `${(c.seg[s] / totFolder) * 100}%`,
-                                  background: ST[s].soft,
-                                }}
-                                title={`${c.seg[s]} cavaletes`}
-                              />
-                            ) : null
                           )}
-                        </div>
-                        <small className="muted">
+                        </td>
+
+                        <td className="cli-td-num">
+                          {c.obras.length}
+                        </td>
+
+                        <td className="cli-td-num">
+                          {c.totalCav}
+                        </td>
+
+                        <td style={{ textAlign: 'center' }}>
                           {c.lateQ > 0 ? (
-                            <span style={{ color: 'var(--late)', fontWeight: 600 }}>{c.lateQ} excederam limite</span>
+                            <span className="cli-tag-foraprazo">
+                              <Icon name="alert" />
+                              <span>{c.lateQ}</span>
+                            </span>
                           ) : (
-                            <span>Em dia</span>
+                            <span className="muted">—</span>
                           )}
-                        </small>
-                      </div>
-                    ) : (
-                      <div className="cli-row-prazo">
-                        <small className="muted">Sem cavaletes em posse</small>
-                      </div>
-                    )}
+                        </td>
 
-                    <div className="cli-row-count">
-                      <span
-                        className="cli-row-num num"
-                        style={{ color: c.lateQ > 0 ? 'var(--late)' : c.totalCav > 0 ? 'var(--ink)' : 'var(--muted)' }}
-                      >
-                        {c.totalCav}
-                      </span>
-                      <small className="muted">cavaletes</small>
-                    </div>
-                  </div>
+                        <td>
+                          {c.lateQ > 0 ? (
+                            <span className="cli-st-atraso">
+                              Fora do prazo
+                            </span>
+                          ) : c.totalCav > 0 ? (
+                            <span className="cli-st-emdia">
+                              Em dia
+                            </span>
+                          ) : (
+                            <span className="cli-st-vazio">Sem cavaletes</span>
+                          )}
+                        </td>
 
-                  <div className="cli-row-actions" onClick={e => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="btn-al-open"
-                      onClick={() => openEmpresa(c.name)}
-                    >
-                      Abrir ↗
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-soft"
-                      onClick={() => openModal({ type: 'nova', empresa: c.name })}
-                      title="Nova entrega para este cliente"
-                    >
-                      <Icon name="plus" />
-                      <span>Nova entrega</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                        <td style={{ textAlign: 'right', paddingRight: '16px' }}>
+                          <span className="cli-go-arrow">
+                            <Icon name="right" />
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -1054,13 +1407,13 @@ export default function EscritorioView() {
   }
 
   // ================= PÁGINA OBRAS =================
-  if (page === 'obras') {
+  if (obraId || page === 'obras') {
     // ---------------- FICHA DA OBRA ----------------
     if (obraId) {
       const o = obras.find(x => x.id === obraId);
       if (!o) return null;
       const r = resumo(o, movs);
-      const hist = movs.filter(m => m.obraId === o.id).sort((a, b) => b.data - a.data);
+      const hist = movs.filter(m => m.obraId === o.id).sort((a, b) => new Date(b.data) - new Date(a.data));
 
       const f = r.first;
       const st = r.total ? r.st : 'vazia';
@@ -1070,8 +1423,8 @@ export default function EscritorioView() {
         ? f.dias < 0
           ? `Ultrapassado há ${-f.dias} dia${f.dias === -1 ? '' : 's'}`
           : f.dias === 0
-          ? 'Termina hoje'
-          : `Faltam ${f.dias} dia${f.dias === 1 ? '' : 's'}`
+            ? 'Termina hoje'
+            : `Faltam ${f.dias} dia${f.dias === 1 ? '' : 's'}`
         : 'Sem cavaletes na obra';
 
       const nLots = r.lots.length;
@@ -1089,27 +1442,64 @@ export default function EscritorioView() {
             </button>
             <button type="button" onClick={() => openEmpresa(o.empresa)}>
               <Icon name="users" />Empresa: {o.empresa}
-              <span className="otb">{nEmp}</span>
             </button>
           </div>
 
-          <section className="ocard ohero">
-            <div className="oh-top">
-              <div>
-                <button
-                  type="button"
-                  className="oh-emp oh-empl"
-                  onClick={() => openEmpresa(o.empresa)}
-                >
-                  {o.empresa}
-                  <Icon name="right" />
-                </button>
+          <section className="ocard emp-unified-card">
+            <div className="emp-uni-top">
+              <div className="emp-uni-main">
+                <div className="emp-meta-top">
+                  <span className="emp-meta-loc">
+                    <Icon name="pin" />
+                    {o.morada}, {o.cidade} · {o.distrito}
+                  </span>
+                  <span className="emp-meta-dash">—</span>
+                  <button
+                    type="button"
+                    className="emp-meta-link"
+                    onClick={() => openEmpresa(o.empresa)}
+                  >
+                    <Icon name="users" />
+                    {o.empresa}
+                  </button>
+                </div>
+
                 <h1 className="oh-t">{o.nome}</h1>
-                <p className="oh-a">
-                  <Icon name="pin" />
-                  {o.morada}, {o.cidade} · {o.distrito}
-                </p>
+
+                <div className="emp-contact-strip">
+                  {o.contacto && (
+                    <span className="emp-cs-item" title="Responsável">
+                      <Icon name="user" />
+                      <span>{o.contacto}</span>
+                    </span>
+                  )}
+                  {/\d/.test(o.tel) && (
+                    <>
+                      {o.contacto && <span className="emp-cs-dot">·</span>}
+                      <a
+                        className="emp-cs-item"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href={`tel:+351${o.tel.replace(/\D/g, '')}`}
+                        title="Telemóvel"
+                      >
+                        <Icon name="phone" />
+                        <span>{o.tel}</span>
+                      </a>
+                    </>
+                  )}
+                  {o.email && (
+                    <>
+                      {(o.contacto || /\d/.test(o.tel)) && <span className="emp-cs-dot">·</span>}
+                      <a className="emp-cs-item" href={`mailto:${o.email}`} title="Email">
+                        <Icon name="mail" />
+                        <span>{o.email}</span>
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
+
               <div className="oh-act">
                 <button
                   type="button"
@@ -1147,54 +1537,50 @@ export default function EscritorioView() {
               </div>
             </div>
 
-            <div className="oh-mid">
-              <div className="oh-cnt">
-                <small>Cavaletes nesta obra</small>
-                <span className="num">{r.total}</span>
-                {r.transito ? <em>+ {r.transito} a caminho</em> : null}
+            <div className="emp-uni-divider" />
+
+            <div className="emp-uni-kpis obra-uni-kpis">
+              <div className="emp-uni-kpi">
+                <small>Cavaletes na obra</small>
+                <span className="num">{fmtN(r.total)}</span>
               </div>
-              <div className="oh-pz">
-                <div className="oh-pzh">
-                  <span>Prazo da entrega mais antiga ({PRAZO} dias)</span>
-                  <b style={{ color: r.total ? ST[st].color : 'var(--muted)' }}>{prazoTxt}</b>
-                </div>
-                <div className="oh-bar">
-                  <i style={{ width: `${f ? Math.max(3, used * 100) : 0}%`, background: col }} />
-                </div>
-                <div className="oh-pzf">
-                  <span>{f ? `Data de envio: ${fd(f.data)}` : ''}</span>
-                  <span>{f ? `Limite mais próximo: ${fd(f.prazo)}` : ''}</span>
-                </div>
+              <div className="emp-uni-kpi">
+                <small>A caminho</small>
+                <span className="num">{fmtN(r.transito || 0)}</span>
               </div>
             </div>
 
-            <div className="oh-con">
-              <div className="oc-i">
-                <small>Responsável</small>
-                <span><Icon name="user" />{o.contacto}</span>
+            {r.total > 0 && (
+              <div className="emp-uni-prazos">
+                <div className="emp-prazos-left">
+                  <span className="emp-prazos-title">Distribuição dos prazos</span>
+                  <span className="emp-prazos-bar">
+                    {['ok', 'watch', 'soon', 'late'].map(k => {
+                      const count = r.lots.filter(l => stFor(l.data, l.dias) === k).reduce((s, l) => s + l.qtd, 0);
+                      return count ? (
+                        <i key={k} style={{ flex: count, background: ST[k].color }} title={`${count} cavaletes`} />
+                      ) : null;
+                    })}
+                  </span>
+                </div>
+                <div className="emp-prazos-legend">
+                  {[
+                    ['ok', '< 30 dias'],
+                    ['watch', '30–50 d.'],
+                    ['soon', '50–60 d.'],
+                    ['late', 'Terminado'],
+                  ].map(([k, l], idx) => (
+                    <React.Fragment key={k}>
+                      {idx > 0 && <span className="emp-prazos-sep">—</span>}
+                      <span className="emp-prazos-legend-item">
+                        <i style={{ background: ST[k].color }} />
+                        <span>{l}</span>
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
-              <div className="oc-i">
-                <small>Telemóvel</small>
-                <span>
-                  <Icon name="phone" />
-                  {/\d/.test(o.tel) ? (
-                    <a className="tel-link" target="_blank" rel="noopener noreferrer" href={`tel:+351${o.tel.replace(/\D/g, '')}`}>
-                      {o.tel}
-                    </a>
-                  ) : (
-                    o.tel
-                  )}
-                </span>
-              </div>
-              <div className="oc-i">
-                <small>Email</small>
-                <span><Icon name="mail" />{o.email}</span>
-              </div>
-              <div className="oc-i">
-                <small>Último lembrete</small>
-                <span><Icon name="cal" />{lembretes[o.id] ? fd(lembretes[o.id]) : 'Nenhum enviado'}</span>
-              </div>
-            </div>
+            )}
           </section>
 
           {nLots > 0 && (
@@ -1204,95 +1590,130 @@ export default function EscritorioView() {
                   <h2>Prazos por entrega nesta obra</h2>
                   <p>As recolhas abatem primeiro no lote de entrega mais antigo.</p>
                 </div>
-                <span className="oc-badge">{nLots} lote{nLots > 1 ? 's' : ''} ativo{nLots > 1 ? 's' : ''}</span>
               </div>
-              <div className="tablewrap">
-                <table className="otab">
-                  <thead>
-                    <tr>
-                      <th>Guia</th>
-                      <th>Data de entrega</th>
-                      <th>Cavaletes na obra</th>
-                      <th>Data limite</th>
-                      <th>Dias restantes</th>
-                      <th style={{ textAlign: 'right' }}>Situação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.lots.map(l => {
-                      const s2 = stFor(l.data, l.dias);
-                      return (
-                        <tr key={l.mov.id}>
-                          <td data-l="Guia"><span className="atl-code">{l.mov.guia}</span></td>
-                          <td data-l="Data de entrega">{fd(l.data)}</td>
-                          <td data-l="Cavaletes na obra">
-                            <span className="qinfo">
+              <div className="cli-table-card" style={{ marginTop: '0' }}>
+                <div className="cli-table-wrap">
+                  <table className="cli-table">
+                    <thead>
+                      <tr>
+                        <th>Guia</th>
+                        <th>Data de entrega</th>
+                        <th>Cavaletes na obra</th>
+                        <th>Data limite</th>
+                        <th>Dias restantes</th>
+                        <th style={{ textAlign: 'right' }}>Situação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {r.lots.map(l => {
+                        const s2 = stFor(l.data, l.dias);
+                        return (
+                          <tr key={l.mov.id}>
+                            <td>{l.mov.guia}</td>
+                            <td>{fmtSlashDate(l.data)}</td>
+                            <td>
                               <b>{l.qtd} cavaletes</b>
-                              <button
-                                type="button"
-                                className="infob"
-                                aria-label="Ver números dos cavaletes"
-                                onClick={() => openModal({ type: 'cavnums', id: l.mov.id })}
-                              >
-                                <Icon name="info" />
-                              </button>
-                            </span>
-                          </td>
-                          <td data-l="Data limite">{fd(l.prazo)}</td>
-                          <td data-l="Dias restantes" style={{ color: ST[s2].color, fontWeight: 500 }}>
-                            {diasTxt(l.dias).replace(/^./, c => c.toUpperCase())}
-                          </td>
-                          <td data-l="Situação" style={{ textAlign: 'right' }}>
-                            <span className="spill" style={{ '--c': ST[s2].color }}>
-                              <i />
+                            </td>
+                            <td>{fmtSlashDate(l.prazo)}</td>
+                            <td style={{ color: ST[s2].color, fontWeight: 600 }}>
+                              {diasTxt(l.dias).replace(/^./, c => c.toUpperCase())}
+                            </td>
+                            <td style={{ textAlign: 'right', color: ST[s2].color, fontWeight: 600 }}>
                               {ST[s2].label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           )}
 
-          <section className="ocard">
+          <section className="ocard ohist-card">
             <div className="oc-h">
               <div>
                 <h2>Histórico de movimentos da obra</h2>
+                <p>Todas as guias de entrega e recolha registadas nesta obra.</p>
               </div>
-              <span className="oc-sub">{hist.length} movimento{hist.length === 1 ? '' : 's'} registado{hist.length === 1 ? '' : 's'}</span>
             </div>
-            <div className="ohist">
-              {hist.map(m => {
-                const isE = m.tipo === 'entrega';
-                const subParts = [
-                  m.motorista ? `Motorista: Sr. ${m.motorista}` : '',
-                  isE && m.assinatura ? `Assinado por ${m.assinatura}` : '',
-                ].filter(Boolean);
 
-                return (
-                  <div key={m.id} className={`oh-row ${isE ? 'is-e' : 'is-r'}`}>
-                    <span className="oh-type">{isE ? 'Entrega' : 'Recolha'}</span>
-                    <div className="oh-rt">
-                      <b>
-                        {isE ? qEntregue(m) : m.qtd} cavaletes <span className="atl-code">{m.guia}</span>
-                        <small> · {fd(m.data)}</small>
-                      </b>
-                      <span>{subParts.join(' · ')}</span>
-                    </div>
-                    {movPill(m)}
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => openModal({ type: 'mov', id: m.id })}
-                    >
-                      Detalhes
-                    </button>
-                  </div>
-                );
-              })}
+            <div className="cli-table-card ohist-table-card" style={{ marginTop: '0' }}>
+              <div className="cli-table-wrap">
+                <table className="cli-table ohist-table">
+                  <thead>
+                    <tr>
+                      <th>Guia</th>
+                      <th>Tipo</th>
+                      <th>Data</th>
+                      <th>Quantidade</th>
+                      <th>Motorista</th>
+                      <th>Assinatura / Estado</th>
+                      <th style={{ width: '40px' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hist.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: 'center', padding: '32px' }}>
+                          <p className="muted" style={{ margin: 0 }}>Nenhum movimento registado nesta obra.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      hist.map(m => {
+                        const isE = m.tipo === 'entrega';
+                        const motNome = m.motorista ? cleanPerson(m.motorista) : '—';
+                        const assEst = m.tipo === 'recolha'
+                          ? (m.estado === 'concluida'
+                              ? 'Recolhida'
+                              : m.estado === 'divergencia'
+                              ? 'Divergência'
+                              : m.estado === 'agendada'
+                              ? 'Agendada'
+                              : m.estado === 'por_atribuir'
+                              ? 'Na logística'
+                              : 'Pendente')
+                          : m.assinatura
+                          ? cleanPerson(m.assinatura)
+                          : (m.estado === 'divergencia' ? 'Divergência' : 'Por assinar');
+
+                        return (
+                          <tr
+                            key={m.id}
+                            className="oh-trow"
+                            onClick={() => openModal({ type: 'mov', id: m.id })}
+                          >
+                            <td>{m.guia}</td>
+                            <td>
+                              <span className={`oh-txt-tipo ${isE ? 'is-e' : 'is-r'}`}>
+                                {isE ? 'Entrega' : 'Recolha'}
+                              </span>
+                            </td>
+                            <td>{fmtSlashDate(m.data)}</td>
+                            <td>{isE ? qEntregue(m) : m.qtd} cavaletes</td>
+                            <td>{motNome}</td>
+                            <td>{assEst}</td>
+                            <td style={{ textAlign: 'right', width: '40px' }}>
+                              <button
+                                type="button"
+                                className="oh-row-arrow"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  openModal({ type: 'mov', id: m.id });
+                                }}
+                                aria-label="Ver detalhes"
+                              >
+                                <Icon name="right" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         </>
@@ -1342,18 +1763,12 @@ export default function EscritorioView() {
       (a, b) => b[1].lateObras - a[1].lateObras || b[1].cav - a[1].cav
     );
 
-    const baseList = obras
-      .map(o => ({ o, r: resumo(o, movs) }))
-      .filter(x => (x.r.total > 0 || x.r.transito > 0) && inGroup(x.o))
-      .map(x => x.r);
-    const countStatus = st => baseList.filter(r => r.st === st).length;
-
     const chips = [
-      ['todas', 'Todas', baseList.length],
-      ['late', 'Prazo terminado', countStatus('late')],
-      ['soon', '50–60 dias', countStatus('soon')],
-      ['watch', '30–50 dias', countStatus('watch')],
-      ['ok', '< 30 dias', countStatus('ok')],
+      ['todas', 'Todas'],
+      ['late', 'Prazo terminado'],
+      ['soon', '50–60 dias'],
+      ['watch', '30–50 dias'],
+      ['ok', '< 30 dias'],
     ];
 
     return (
@@ -1469,81 +1884,83 @@ export default function EscritorioView() {
           </div>
         ) : (
           <>
-            {ogSel && og !== 'todas' && (
-              <div className="crumb">
-                <button
-                  type="button"
-                  className="linkbtn"
-                  onClick={() => {
-                    setOgSel(null);
-                    setMlim(10);
-                  }}
-                >
-                  <Icon name="left" />
-                  {og === 'distrito' ? 'Distritos' : 'Empresas'}
-                </button>
-                <span>/</span>
-                <b>{ogSel}</b>
-                {og === 'empresa' && (
+            <div className="obras-header-row">
+              {ogSel && og !== 'todas' ? (
+                <div className="crumb">
                   <button
                     type="button"
-                    className="empfull"
-                    onClick={() => openEmpresa(ogSel)}
+                    className="linkbtn"
+                    onClick={() => {
+                      setOgSel(null);
+                      setMlim(10);
+                    }}
+                    title={og === 'distrito' ? 'Voltar aos distritos' : 'Voltar às empresas'}
                   >
-                    <Icon name="users" />
-                    <span>Ver ficha completa da empresa</span>
-                    <svg className="efa" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
+                    <Icon name="left" />
+                    <span>{og === 'distrito' ? 'Distritos' : 'Empresas'}</span>
                   </button>
-                )}
-              </div>
-            )}
+                  <span className="crumb-sep">/</span>
+                  <b className="crumb-title">{ogSel}</b>
+                  {og === 'empresa' && (
+                    <button
+                      type="button"
+                      className="empfull"
+                      onClick={() => openEmpresa(ogSel)}
+                    >
+                      <Icon name="users" />
+                      <span>Ver ficha completa da empresa</span>
+                      <svg className="efa" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14M13 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ) : <div />}
 
-            <div className="chips-seg" style={{ marginBottom: '16px' }} role="group" aria-label="Filtrar">
-              {chips.map(([k, l, count]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="chip"
-                  aria-pressed={filtro === k}
-                  onClick={() => {
-                    setFiltro(k);
-                    setMlim(10);
-                  }}
-                >
-                  {l} <span className="n">{count}</span>
-                </button>
-              ))}
+              <div className="chips-seg" role="group" aria-label="Filtrar">
+                {chips.map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className="chip"
+                    aria-pressed={filtro === k}
+                    onClick={() => {
+                      setFiltro(k);
+                      setMlim(10);
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="olist" id="olist">
               {filteredList.length === 0 ? (
-                <div className="card" style={{ padding: '28px', textAlign: 'center' }}>
-                  <p className="muted">Nenhuma obra encontrada.</p>
+                <div className="olist-empty">
+                  <Icon name="search" />
+                  <p>Nenhuma obra encontrada.</p>
                 </div>
               ) : (
                 filteredList.slice(0, mlim).map(({ o, r }) => (
                   <div
                     key={o.id}
-                    className="orow"
+                    className={`orow st-${r.st}`}
+                    style={{ '--stripe': ST[r.st]?.color || '#10b981' }}
                     role="button"
                     tabIndex={0}
                     onClick={() => openObra(o.id)}
                   >
                     <div className="oleft">
-                      <div className="oname">
-                        <b>{o.nome}</b>
-                        <span className="oloc">
-                          <Icon name="pin" />
-                          {o.morada}, {o.cidade}
-                        </span>
+                      <div className="oname-line">
+                        <b className="oname">{o.nome}</b>
                       </div>
                       <div className="ometa">
                         <span
                           className="oemp"
                           role="button"
                           tabIndex={0}
+                          title={`Ver empresa ${o.empresa}`}
                           onClick={e => {
                             e.stopPropagation();
                             openEmpresa(o.empresa);
@@ -1551,7 +1968,17 @@ export default function EscritorioView() {
                         >
                           {o.empresa}
                         </span>
-                        {r.transito > 0 && <span className="otrn">+{r.transito} a caminho</span>}
+                        <span className="ometa-sep">·</span>
+                        <span className="oloc">
+                          <Icon name="pin" />
+                          <span>{o.cidade || o.morada}</span>
+                        </span>
+                        {r.transito > 0 && (
+                          <>
+                            <span className="ometa-sep">·</span>
+                            <span className="otrn">+{r.transito} a caminho</span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -1562,28 +1989,34 @@ export default function EscritorioView() {
                             <i
                               style={{
                                 width: `${Math.max(4, Math.min(100, (1 - r.dias / PRAZO) * 100))}%`,
-                                background: ST[r.st].soft,
+                                background: ST[r.st].color,
                               }}
                             />
-                            <div className="ticks">
-                              <span /><span /><span /><span /><span /><span />
-                            </div>
                           </div>
-                          <small>
-                            <span style={{ color: ST[r.st].color, fontWeight: 500 }}>{diasTxt(r.dias)}</span> · prazo {fd(r.first.prazo)}
-                          </small>
+                          <div className="prazo-meta">
+                            <span className="prazo-txt" style={{ color: ST[r.st].color }}>
+                              {diasTxt(r.dias).replace(/^./, c => c.toUpperCase())}
+                            </span>
+                            <span className="prazo-sep">·</span>
+                            <span className="prazo-data">limite {fd(r.first.prazo)}</span>
+                          </div>
                         </div>
                       ) : (
-                        <div className="prazo"><small>Sem cavaletes na obra</small></div>
+                        <div className="prazo prazo-vazio">
+                          <small>Sem cavaletes na obra</small>
+                        </div>
                       )}
                     </div>
 
                     <div className="oright">
-                      <span className="onum num">{r.total}</span>
-                      <small className="muted">cavaletes</small>
+                      <div className="ocav-box">
+                        <span className="onum num">{r.total}</span>
+                        <span className="olbl">{r.total === 1 ? 'cavalete' : 'cavaletes'}</span>
+                      </div>
+                      <span className="chev" aria-hidden="true">
+                        <Icon name="right" />
+                      </span>
                     </div>
-
-                    <span className="chev"><Icon name="right" /></span>
                   </div>
                 ))
               )}
@@ -1723,38 +2156,39 @@ export default function EscritorioView() {
           <div className="card-b" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: '0 0 16px 0' }}>Todos os cavaletes</h2>
 
-            {/* Barra de Pesquisa */}
-            <div className="search" style={{ width: '100%', marginBottom: '16px' }}>
-              <Icon name="search" />
-              <input
-                id="cav-q"
-                type="search"
-                placeholder="Procurar por número ou obra"
-                value={cav.q}
-                onChange={e => setCav(s => ({ ...s, q: e.target.value, lim: 20 }))}
-                aria-label="Procurar cavalete"
-              />
-            </div>
+            {/* Barra de Pesquisa e Filtros na mesma linha */}
+            <div className="toolbar" style={{ marginBottom: '18px' }}>
+              <label className="search" htmlFor="cav-q">
+                <Icon name="search" />
+                <input
+                  id="cav-q"
+                  type="search"
+                  placeholder="Procurar por número ou obra"
+                  value={cav.q}
+                  onChange={e => setCav(s => ({ ...s, q: e.target.value, lim: 20 }))}
+                  aria-label="Procurar cavalete"
+                />
+              </label>
 
-            {/* Chips de Filtragem por Estado */}
-            <div className="chips" style={{ marginBottom: '18px' }} role="group" aria-label="Filtrar por estado">
-              {[
-                ['todos', 'Todos', inv.length],
-                ['fabrica', 'Na fábrica', cFab],
-                ['obra', 'Em obra', cObra],
-                ['caminho', 'A caminho', cCam],
-                ['late', 'Fora do prazo', cLate],
-              ].map(([k, l, count]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="chip"
-                  aria-pressed={cav.est === k}
-                  onClick={() => setCav(s => ({ ...s, est: k, lim: 20 }))}
-                >
-                  {l} <span className="n">{count}</span>
-                </button>
-              ))}
+              <div className="ogseg" role="group" aria-label="Filtrar por estado">
+                {[
+                  ['todos', 'Todos', inv.length],
+                  ['fabrica', 'Na fábrica', cFab],
+                  ['obra', 'Em obra', cObra],
+                  ['caminho', 'A caminho', cCam],
+                  ['late', 'Fora do prazo', cLate],
+                ].map(([k, l, count]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={cav.est === k}
+                    onClick={() => setCav(s => ({ ...s, est: k, lim: 20 }))}
+                  >
+                    <span>{l}</span>
+                    <span className="n">{count}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Tabela de Cavaletes */}
@@ -1778,24 +2212,18 @@ export default function EscritorioView() {
                     return (
                       <tr key={c.n}>
                         <td className="num" style={{ fontWeight: 600 }}>{c.n}</td>
-                        <td>{TIPOS_CAV[c.tipo]?.nome || c.tipo}</td>
+                        <td className={`cav-tipo-${c.tipo}`} style={{ color: `var(--t${c.tipo})`, fontWeight: 600 }}>
+                          {TIPOS_CAV[c.tipo]?.nome || c.tipo}
+                        </td>
                         <td>
                           {c.estado === 'fabrica' ? (
-                            <span className="pill tone-ok">
-                              <Icon name="factory" /> Na fábrica
-                            </span>
+                            <span className="pill tone-ok">Na fábrica</span>
                           ) : c.estado === 'caminho' ? (
-                            <span className="pill tone-warn">
-                              <Icon name="truck" /> A caminho
-                            </span>
+                            <span className="pill tone-warn">A caminho</span>
                           ) : isLate ? (
-                            <span className="pill tone-late">
-                              <Icon name="alert" /> Fora do prazo
-                            </span>
+                            <span className="pill tone-late">Fora do prazo</span>
                           ) : (
-                            <span className="pill tone-info">
-                              <Icon name="obra" /> Em obra
-                            </span>
+                            <span className="pill tone-info">Em obra</span>
                           )}
                         </td>
                         <td>
@@ -1944,6 +2372,15 @@ export default function EscritorioView() {
 
   // ================= PÁGINA MOVIMENTOS / ENTREGAS =================
   if (page === 'entregas') {
+    const getMovTime = d => {
+      if (!d) return 0;
+      if (d instanceof Date) return d.getTime();
+      const dt = typeof d === 'string' ? parseIso(d) : new Date(d);
+      return dt && !isNaN(dt.getTime()) ? dt.getTime() : 0;
+    };
+
+    const sortedMovs = [...movs].sort((a, b) => getMovTime(b.data) - getMovTime(a.data));
+
     return (
       <>
         <div className="pagehead">
@@ -1967,7 +2404,7 @@ export default function EscritorioView() {
         <section className="card">
           <div className="card-b">
             <div className="mlist">
-              {movs.map(m => renderMovRow(m, obras, openModal, openObra, openEmpresa))}
+              {sortedMovs.map(m => renderMovRow(m, obras, openModal, openObra, openEmpresa))}
             </div>
           </div>
         </section>
@@ -2009,137 +2446,35 @@ export default function EscritorioView() {
 
     const groups = [
       {
-        k: 'late',
-        dot: 'is-red',
-        t: `Prazo Terminado — Urgente (${lateList.length})`,
-        sub: `(Entregas com mais de ${PRAZO} dias de permanência na obra)`,
-        items: lateList.map(({ o, r }) => (
-          <div key={o.id} className="al-card">
-            <div className="al-card-main">
-              <div className="al-card-row1">
-                <span className="al-card-obra">{o.nome}</span>
-                <span className="al-sep">·</span>
-                <span className="al-card-cidade">{o.cidade}</span>
-              </div>
-              <div className="al-card-row2">
-                <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
-              </div>
-              <div className="al-card-row3">
-                <span>{r.first?.qtd || r.total} cavaletes na obra</span>
-                <span className="al-sep">·</span>
-                <span className="al-tag-late">Ultrapassado há {Math.abs(r.dias)} dias</span>
-                <span className="al-sep">·</span>
-                <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
-              </div>
-            </div>
-            <div className="al-card-actions">
-              <button
-                type="button"
-                className="btn-al-open"
-                onClick={() => openObra(o.id)}
-              >
-                Abrir ↗
-              </button>
-              <button
-                type="button"
-                className="btn-al-action is-red"
-                onClick={() =>
-                  openModal({
-                    type: 'email',
-                    obraId: o.id,
-                    tpl: 'terminado',
-                  })
-                }
-              >
-                <Icon name="mail" />
-                <span>Preparar email</span>
-              </button>
-            </div>
-          </div>
-        )),
-      },
-      {
-        k: 'soon',
-        dot: 'is-orange',
-        t: `Termina nos Próximos 30 Dias (${soonList.length})`,
-        sub: `(Recomendado envio de lembrete com antecedência)`,
-        items: soonList.map(({ o, r }) => (
-          <div key={o.id} className="al-card">
-            <div className="al-card-main">
-              <div className="al-card-row1">
-                <span className="al-card-obra">{o.nome}</span>
-                <span className="al-sep">·</span>
-                <span className="al-card-cidade">{o.cidade}</span>
-              </div>
-              <div className="al-card-row2">
-                <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
-              </div>
-              <div className="al-card-row3">
-                <span>{r.first?.qtd || r.total} cavaletes na obra</span>
-                <span className="al-sep">·</span>
-                <span className="al-tag-soon">Faltam {r.dias} dias para o limite</span>
-                <span className="al-sep">·</span>
-                <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
-              </div>
-            </div>
-            <div className="al-card-actions">
-              <button
-                type="button"
-                className="btn-al-open"
-                onClick={() => openObra(o.id)}
-              >
-                Abrir ↗
-              </button>
-              <button
-                type="button"
-                className="btn-al-action is-dark"
-                onClick={() =>
-                  openModal({
-                    type: 'email',
-                    obraId: o.id,
-                    tpl: 'amigavel',
-                  })
-                }
-              >
-                <Icon name="mail" />
-                <span>Preparar email</span>
-              </button>
-            </div>
-          </div>
-        )),
-      },
-      {
         k: 'dif',
         dot: 'is-amber',
         t: `Diferenças nas Entregas (${difs.length})`,
         sub: `(Entregas com números que não batem certo por resolver)`,
         items: difs.map(m => {
           const o = obras.find(x => x.id === m.obraId);
+          const distrito = o?.distrito || o?.cidade || '';
           const diffQtd = Math.abs(m.qtd - (m.qtdCli ?? m.qtd));
           return (
-            <div key={m.id} className="al-card">
+            <div key={m.id} className="al-card al-card-dif">
               <div className="al-card-main">
                 <div className="al-card-row1">
-                  <span className="al-card-obra">Guia {m.guia}</span>
-                  <span className="al-sep">·</span>
-                  <span className="al-card-obra" style={{ fontWeight: 600 }}>{o?.nome || 'Obra não encontrada'}</span>
-                  {o?.cidade && (
+                  <span className="al-card-obra">{o?.nome || 'Obra não encontrada'}</span>
+                  {o?.empresa && (
                     <>
-                      <span className="al-sep">·</span>
-                      <span className="al-card-cidade">{o.cidade}</span>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-emp" onClick={() => o && openEmpresa(o.empresa)}>{o.empresa}</span>
                     </>
                   )}
+                  {distrito && (
+                    <>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-distrito">{distrito}</span>
+                    </>
+                  )}
+                  <span className="al-sep">·</span>
+                  <span className="al-card-obra" style={{ fontWeight: 600, fontSize: '0.92rem' }}>Guia {m.guia}</span>
                 </div>
                 <div className="al-card-row2">
-                  <span className="al-card-emp" onClick={() => o && openEmpresa(o.empresa)}>{o?.empresa}</span>
-                  {m.motorista && (
-                    <>
-                      <span className="al-sep" style={{ margin: '0 6px' }}>·</span>
-                      <span>Motorista: Sr. {m.motorista}</span>
-                    </>
-                  )}
-                </div>
-                <div className="al-card-row3">
                   <span className="al-tag-soon">{diffQtd} cavalete{diffQtd > 1 ? 's' : ''} em falta</span>
                   <span className="al-sep">·</span>
                   <span>Vidraria: <b>{m.qtd}</b></span>
@@ -2147,6 +2482,12 @@ export default function EscritorioView() {
                   <span>Cliente: <b style={{ color: 'var(--warn)' }}>{m.qtdCli ?? '—'}</b></span>
                   <span className="al-sep">·</span>
                   <span className="al-limite">Data: {fmtSlashDate(m.data)}</span>
+                  {m.motorista && (
+                    <>
+                      <span className="al-sep">·</span>
+                      <span className="al-limite">Motorista: Sr. {m.motorista}</span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="al-card-actions">
@@ -2179,27 +2520,31 @@ export default function EscritorioView() {
         sub: `(Pedidos efetuados pelos clientes a aguardar recolha)`,
         items: peds.map(p => {
           const o = obras.find(x => x.id === p.obraId);
+          const distrito = o?.distrito || o?.cidade || '';
           const isPend = p.estado === 'pendente';
           const isLog = p.estado === 'logistica';
           return (
-            <div key={p.id} className="al-card">
+            <div key={p.id} className="al-card al-card-ped">
               <div className="al-card-main">
                 <div className="al-card-row1">
                   <span className="al-card-obra">{o?.nome || 'Obra'}</span>
-                  {o?.cidade && (
+                  {o?.empresa && (
                     <>
-                      <span className="al-sep">·</span>
-                      <span className="al-card-cidade">{o.cidade}</span>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-emp" onClick={() => o && openEmpresa(o.empresa)}>{o.empresa}</span>
+                    </>
+                  )}
+                  {distrito && (
+                    <>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-distrito">{distrito}</span>
                     </>
                   )}
                 </div>
                 <div className="al-card-row2">
-                  <span className="al-card-emp" onClick={() => o && openEmpresa(o.empresa)}>{o?.empresa}</span>
-                </div>
-                <div className="al-card-row3">
                   <span><b>{p.qtd}</b> cavaletes para recolha</span>
                   <span className="al-sep">·</span>
-                  <span className="al-tag-info">{isPend ? 'Por marcar' : isLog ? 'Na logística' : 'Agendada'}</span>
+                  <span className="al-tag-info">{isPend ? 'Por marcar' : isLog ? 'Na logística (selecionar motorista)' : 'Agendada'}</span>
                   <span className="al-sep">·</span>
                   <span className="al-limite">Pedido {rel(p.data)}</span>
                 </div>
@@ -2230,10 +2575,10 @@ export default function EscritorioView() {
                   <button
                     type="button"
                     className="btn-al-action is-dark"
-                    onClick={() => openModal({ type: 'atrib', pid: p.id })}
+                    onClick={() => openModal({ type: 'atrib', pid: p.id, movId: p.movId })}
                   >
                     <Icon name="truck" />
-                    <span>Atribuir motorista</span>
+                    <span>Selecionar motorista</span>
                   </button>
                 ) : (
                   <button
@@ -2251,40 +2596,161 @@ export default function EscritorioView() {
         }),
       },
       {
+        k: 'late',
+        dot: 'is-red',
+        t: `Prazos Expirados — Urgente (${lateList.length})`,
+        sub: `(Cavaletes há mais de 60 dias no cliente)`,
+        items: lateList.map(({ o, r }) => {
+          const distrito = o.distrito || o.cidade || '';
+          const q = r.first?.qtd || r.total;
+          return (
+            <div key={o.id} className="al-card al-card-late">
+              <div className="al-card-main">
+                <div className="al-card-row1">
+                  <span className="al-card-obra">{o.nome}</span>
+                  <span className="al-sep">-</span>
+                  <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
+                  {distrito && (
+                    <>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-distrito">{distrito}</span>
+                    </>
+                  )}
+                </div>
+                <div className="al-card-row2">
+                  <span><b>{q}</b> {q === 1 ? 'cavalete' : 'cavaletes'} na obra</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-tag-late">Ultrapassado há {Math.abs(r.dias)} dias</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+                </div>
+              </div>
+              <div className="al-card-actions">
+                <button
+                  type="button"
+                  className="btn-al-open"
+                  onClick={() => openObra(o.id)}
+                >
+                  Abrir ↗
+                </button>
+                <button
+                  type="button"
+                  className="btn-al-action is-red"
+                  onClick={() =>
+                    openModal({
+                      type: 'email',
+                      obraId: o.id,
+                      tpl: 'terminado',
+                    })
+                  }
+                >
+                  <Icon name="mail" />
+                  <span>Preparar email</span>
+                </button>
+              </div>
+            </div>
+          );
+        }),
+      },
+      {
+        k: 'soon',
+        dot: 'is-orange',
+        t: `A Terminar — Próximos 30 Dias (${soonList.length})`,
+        sub: `(Recomendado envio de lembrete com antecedência)`,
+        items: soonList.map(({ o, r }) => {
+          const distrito = o.distrito || o.cidade || '';
+          const q = r.first?.qtd || r.total;
+          return (
+            <div key={o.id} className="al-card al-card-soon">
+              <div className="al-card-main">
+                <div className="al-card-row1">
+                  <span className="al-card-obra">{o.nome}</span>
+                  <span className="al-sep">-</span>
+                  <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
+                  {distrito && (
+                    <>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-distrito">{distrito}</span>
+                    </>
+                  )}
+                </div>
+                <div className="al-card-row2">
+                  <span><b>{q}</b> {q === 1 ? 'cavalete' : 'cavaletes'} na obra</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-tag-soon">Faltam {r.dias} dias para o limite</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+                </div>
+              </div>
+              <div className="al-card-actions">
+                <button
+                  type="button"
+                  className="btn-al-open"
+                  onClick={() => openObra(o.id)}
+                >
+                  Abrir ↗
+                </button>
+                <button
+                  type="button"
+                  className="btn-al-action is-dark"
+                  onClick={() =>
+                    openModal({
+                      type: 'email',
+                      obraId: o.id,
+                      tpl: 'amigavel',
+                    })
+                  }
+                >
+                  <Icon name="mail" />
+                  <span>Preparar email</span>
+                </button>
+              </div>
+            </div>
+          );
+        }),
+      },
+      {
         k: 'watch',
         dot: 'is-slate',
         t: `Na Obra há 30 a 50 Dias (${watchList.length})`,
         sub: `(Monitorização e acompanhamento de rotina)`,
-        items: watchList.map(({ o, r }) => (
-          <div key={o.id} className="al-card">
-            <div className="al-card-main">
-              <div className="al-card-row1">
-                <span className="al-card-obra">{o.nome}</span>
-                <span className="al-sep">·</span>
-                <span className="al-card-cidade">{o.cidade}</span>
+        items: watchList.map(({ o, r }) => {
+          const distrito = o.distrito || o.cidade || '';
+          const q = r.first?.qtd || r.total;
+          return (
+            <div key={o.id} className="al-card al-card-watch">
+              <div className="al-card-main">
+                <div className="al-card-row1">
+                  <span className="al-card-obra">{o.nome}</span>
+                  <span className="al-sep">-</span>
+                  <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
+                  {distrito && (
+                    <>
+                      <span className="al-sep">-</span>
+                      <span className="al-card-distrito">{distrito}</span>
+                    </>
+                  )}
+                </div>
+                <div className="al-card-row2">
+                  <span><b>{q}</b> {q === 1 ? 'cavalete' : 'cavaletes'} na obra</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-tag-watch">Faltam {r.dias} dias para o limite</span>
+                  <span className="al-sep">·</span>
+                  <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+                </div>
               </div>
-              <div className="al-card-row2">
-                <span className="al-card-emp" onClick={() => openEmpresa(o.empresa)}>{o.empresa}</span>
-              </div>
-              <div className="al-card-row3">
-                <span>{r.first?.qtd || r.total} cavaletes na obra</span>
-                <span className="al-sep">·</span>
-                <span className="al-tag-info">Faltam {r.dias} dias para o limite</span>
-                <span className="al-sep">·</span>
-                <span className="al-limite">Limite: {fmtSlashDate(r.first?.prazo)}</span>
+              <div className="al-card-actions">
+                <button
+                  type="button"
+                  className="btn-al-open"
+                  onClick={() => openObra(o.id)}
+                >
+                  Abrir ↗
+                </button>
               </div>
             </div>
-            <div className="al-card-actions">
-              <button
-                type="button"
-                className="btn-al-open"
-                onClick={() => openObra(o.id)}
-              >
-                Abrir ↗
-              </button>
-            </div>
-          </div>
-        )),
+          );
+        }),
       },
     ];
 
@@ -2342,12 +2808,16 @@ export default function EscritorioView() {
                 <span className="val num">{peds.length}</span>
               </div>
               <span className="pill tone-info pill-sm">
-                {nPend} por marcar
+                {nPend > 0 ? `${nPend} por marcar` : (nLog > 0 ? `${nLog} p/ motorista` : 'Em dia')}
               </span>
             </div>
             <div className="alert-kpi-body">
               <span className="lbl">Pedidos de Recolha</span>
-              <span className="sub">{nPend} por marcar</span>
+              <span className="sub">
+                {nPend > 0 ? `${nPend} por marcar` : ''}
+                {nPend > 0 && nLog > 0 ? ' · ' : ''}
+                {nLog > 0 ? `${nLog} a selecionar motorista` : (nPend === 0 ? 'Em dia' : '')}
+              </span>
             </div>
           </div>
 
@@ -2399,7 +2869,7 @@ export default function EscritorioView() {
               <div className="al-group-hd">
                 <span className={`al-dot ${grp.dot}`} />
                 <h3 className="al-group-title">{grp.t}</h3>
-                <span className="al-group-sub">{grp.sub}</span>
+                {grp.sub ? <span className="al-group-sub">{grp.sub}</span> : null}
               </div>
 
               {grp.items.length === 0 ? (
@@ -2896,9 +3366,33 @@ function renderMovRow(m, obras, openModal, openObra, openEmpresa) {
   const o = obras.find(x => x.id === m.obraId);
   const isE = m.tipo === 'entrega';
 
-  const status = isE ? (
+  // Ícones da imagem enviada pelo utilizador:
+  // Entrega: fundo azul claro, seta diagonal para cima à direita (↗)
+  // Recolha: fundo verde claro, seta diagonal para baixo à esquerda (↙)
+  const movIcon = isE ? (
+    <span className="mov-ico-pill is-ent" title="Entrega">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="7" y1="17" x2="17" y2="7" />
+        <polyline points="7 7 17 7 17 17" />
+      </svg>
+    </span>
+  ) : (
+    <span className="mov-ico-pill is-rec" title="Recolha">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="17" y1="7" x2="7" y2="17" />
+        <polyline points="17 17 7 17 7 7" />
+      </svg>
+    </span>
+  );
+
+  const motText = m.motorista ? `Sr. ${cleanPerson(m.motorista)}` : 'Sem motorista';
+
+  // No meio do card: as 3 confirmações
+  const middleConfirmations = isE ? (
     <div className="steps3">
-      <span className="st done"><span className="c"><Icon name="check" /></span>Vidraria {m.qtd}</span>
+      <span className="st done">
+        <span className="c"><Icon name="check" /></span>Vidraria {m.qtd}
+      </span>
       <span className={`st ${m.qtdMot != null ? 'done' : ''}`}>
         <span className="c">{m.qtdMot != null && <Icon name="check" />}</span>
         Motorista{m.qtdMot != null ? ' ' + m.qtdMot : ''}
@@ -2910,77 +3404,94 @@ function renderMovRow(m, obras, openModal, openObra, openEmpresa) {
         Cliente{m.qtdCli != null ? ' ' + m.qtdCli : ''}
       </span>
     </div>
-  ) : m.estado === 'por_atribuir' ? (
-    <span className="pill tone-warn"><Icon name="clock" />Na logística</span>
-  ) : m.estado === 'agendada' ? (
-    <span className="pill tone-info"><Icon name="cal" />Marcada · {fd(m.data)}</span>
   ) : (
     <div className="steps3">
-      <span className="st done"><span className="c"><Icon name="check" /></span>Recolhidos {m.qtd}</span>
+      <span className={`st ${m.estado === 'concluida' ? 'done' : ''}`}>
+        <span className="c">{m.estado === 'concluida' ? <Icon name="check" /> : <Icon name="clock" />}</span>
+        {m.estado === 'concluida' ? `Recolhidos ${m.qtd}` : `A recolher ${m.qtd}`}
+      </span>
     </div>
   );
 
-  const motT = m.motorista ? (
-    isE || m.estado !== 'agendada' ? (
-      <span className="m">Sr. {m.motorista}</span>
-    ) : (
-      <button
-        type="button"
-        className="mtag set"
-        onClick={() => openModal({ type: 'atrib', movId: m.id })}
-      >
-        <Icon name="truck" />Sr. {m.motorista}
-      </button>
-    )
-  ) : (
-    <button
-      type="button"
-      className="mtag"
-      onClick={() => openModal({ type: 'atrib', movId: m.id })}
-    >
-      <Icon name="plus" />Atribuir motorista
-    </button>
-  );
+  // Na direita: tag tipo "entregue", "Na logística", "a caminho" etc
+  const statusTag = () => {
+    switch (m.estado) {
+      case 'entregue':
+        return <span className="mov-status-tag is-ok"><Icon name="check" />Entregue</span>;
+      case 'concluida':
+        return <span className="mov-status-tag is-ok"><Icon name="check" />Recolhida</span>;
+      case 'por_atribuir':
+        return <span className="mov-status-tag is-warn"><Icon name="clock" />Na logística</span>;
+      case 'em_viagem':
+        return <span className="mov-status-tag is-info"><Icon name="truck" />A caminho</span>;
+      case 'agendada':
+        return <span className="mov-status-tag is-info"><Icon name="cal" />Marcada</span>;
+      case 'divergencia':
+        return <span className="mov-status-tag is-bad"><Icon name="alert" />Divergência</span>;
+      case 'pendente':
+        return <span className="mov-status-tag is-warn"><Icon name="clock" />Pedido pendente</span>;
+      default:
+        return <span className="mov-status-tag is-mut">{m.estado || 'Pendente'}</span>;
+    }
+  };
+
+  const dtStr = formatMovDate(m.data);
 
   return (
-    <div key={m.id} className={`mrow ${isE ? 'is-ent' : 'is-rec'}`}>
-      <span className="mic"><Icon name={isE ? 'truck' : 'recolha'} /></span>
-      <div className="mcol">
-        <b>{isE ? 'Entrega' : 'Recolha'} de {m.qtd} cavaletes</b>
-        <span className="m">{m.guia}{m.estado === 'por_atribuir' ? '' : ' · ' + fd(m.data)}</span>
-        {motT}
+    <div
+      key={m.id}
+      className={`mrow ${isE ? 'is-ent' : 'is-rec'}`}
+      onClick={() => openModal({ type: 'mov', id: m.id })}
+    >
+      <div className="mrow-left">
+        {movIcon}
+        <div className="mrow-info">
+          <div className="mrow-line1">
+            <b className="mrow-guia">{m.guia}</b>
+            {m.data && (
+              <>
+                <span className="mrow-sep">·</span>
+                <span className="mrow-date">{dtStr}</span>
+              </>
+            )}
+            <span className="mrow-sep">·</span>
+            <span className="mrow-mot">{motText}</span>
+          </div>
+          <div className="mrow-line2">
+            <button
+              type="button"
+              className="mrow-obra-link"
+              onClick={e => {
+                e.stopPropagation();
+                if (o) openObra(o.id);
+              }}
+            >
+              {o?.nome || 'Obra sem nome'}
+            </button>
+            {o?.empresa && (
+              <>
+                <span className="mrow-sep">-</span>
+                <span
+                  className="mrow-emp"
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (o) openEmpresa(o.empresa);
+                  }}
+                >
+                  {o.empresa}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="mcol">
-        <button
-          type="button"
-          className="mlink"
-          onClick={() => {
-            if (o) openObra(o.id);
-          }}
-        >
-          {o?.nome}
-        </button>
-        <span
-          className="m"
-          style={{ cursor: 'pointer' }}
-          onClick={() => {
-            if (o) openEmpresa(o.empresa);
-          }}
-        >
-          {o?.empresa} · {o?.cidade}
-        </span>
+
+      <div className="mrow-mid">
+        {middleConfirmations}
       </div>
-      <div className="mstat">
-        {status}
-        {m.estado === 'divergencia' && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => openModal({ type: 'resolver', id: m.id })}
-          >
-            Resolver diferença
-          </button>
-        )}
+
+      <div className="mrow-right">
+        {statusTag()}
       </div>
     </div>
   );
