@@ -616,10 +616,9 @@ export default function MotoristaView() {
         <p className="eyebrow">Como funciona</p>
         <h2>O motorista confirma tudo com um toque</h2>
         <ol>
-          <li><span className="n">1</span><span>Recebe um link por SMS. Não instala nada e não precisa de palavra-passe.</span></li>
-          <li><span className="n">2</span><span>Vê a carga do dia já preenchida pelo escritório.</span></li>
-          <li><span className="n">3</span><span>Confere os cavaletes um a um, pelo número. Se faltar ou sobrar algum, o escritório é avisado.</span></li>
-          <li><span className="n">4</span><span>O cliente recebe logo a confirmação para assinar.</span></li>
+          <li><span className="n">1</span><span>Vê a carga do dia já preenchida pelo escritório.</span></li>
+          <li><span className="n">2</span><span>Confere os cavaletes um a um, pelo número. Se faltar ou sobrar algum, o escritório é avisado.</span></li>
+          <li><span className="n">3</span><span>O cliente recebe logo a confirmação para assinar.</span></li>
         </ol>
       </div>
 

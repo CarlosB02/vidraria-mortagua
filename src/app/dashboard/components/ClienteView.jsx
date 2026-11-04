@@ -710,10 +710,10 @@ export default function ClienteView() {
                 const recStatusText = m.estado === 'concluida'
                   ? ' · concluída'
                   : m.estado === 'agendada'
-                  ? ' · agendada'
-                  : m.estado === 'por_atribuir'
-                  ? ' · em processamento'
-                  : ' · pedido pendente';
+                    ? ' · agendada'
+                    : m.estado === 'por_atribuir'
+                      ? ' · em processamento'
+                      : ' · pedido pendente';
                 return (
                   <div key={m.id} className="fitem">
                     <span className={`cd-mi ${isE ? 'e' : 'r'}`}>
@@ -873,10 +873,9 @@ export default function ClienteView() {
         <p className="eyebrow">Como funciona</p>
         <h2>O cliente confirma e assina no telemóvel</h2>
         <ol>
-          <li><span className="n">1</span><span>Recebe um SMS com um link. Abre no telemóvel, sem instalar nada.</span></li>
-          <li><span className="n">2</span><span>Confirma o número com um toque, ou indica outro se não bater certo.</span></li>
-          <li><span className="n">3</span><span>Assina com o dedo. Fica guardado com a data e a hora.</span></li>
-          <li><span className="n">4</span><span>Vê sempre quantos cavaletes tem e até quando os deve devolver.</span></li>
+          <li><span className="n">1</span><span>Confirma o número com um toque, ou indica outro se não bater certo.</span></li>
+          <li><span className="n">2</span><span>Assina com o dedo. Fica guardado com a data e a hora.</span></li>
+          <li><span className="n">3</span><span>Vê sempre quantos cavaletes tem e até quando os deve devolver.</span></li>
         </ol>
       </div>
 
